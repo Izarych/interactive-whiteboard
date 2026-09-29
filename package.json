@@ -1,0 +1,24 @@
+{
+  "name": "interactive-whiteboard",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n web,server -c cyan,green \"npm:dev:web\" \"npm:dev:server\"",
+    "dev:web": "npm run dev --workspace @whiteboard/web",
+    "dev:server": "npm run start:dev --workspace @whiteboard/server",
+    "build": "npm run build --workspaces --if-present",
+    "build:web": "npm run build --workspace @whiteboard/web",
+    "build:server": "npm run build --workspace @whiteboard/server",
+    "db:setup": "npm run db:setup --workspace @whiteboard/server",
+    "test:api": "node --test tests/boards-api.test.cjs",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "concurrently": "^9.2.1"
+  }
+}
