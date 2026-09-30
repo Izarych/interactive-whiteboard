@@ -2,8 +2,17 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import type { ActiveSession, Board, BoardSummary, SessionInfo } from '@whiteboard/shared';
 import { api, errorMessage } from './api';
 import type { EditorHandle } from './BoardEditor';
+import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 
 const BoardEditor = lazy(() => import('./BoardEditor').then((module) => ({ default: module.BoardEditor })));
+const sidebarPreference = 'bluviboard:sidebar-collapsed';
+function sidebarDefault() {
+  try {
+    const stored = localStorage.getItem(sidebarPreference);
+    if (stored !== null) return stored === 'true';
+  } catch { /* Layout still works when browser storage is unavailable. */ }
+  return window.matchMedia('(max-width: 760px)').matches;
+}
 
 function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: {
   session: ActiveSession; blocked: boolean; onAuth: (mode: 'login' | 'register') => void;
@@ -16,6 +25,20 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
   const [error, setError] = useState('');
   const editorRef = useRef<EditorHandle | null>(null);
   const operation = useRef(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(sidebarDefault);
+  const toggleSidebar = () => {
+    setSidebarCollapsed((previous) => {
+      const next = !previous;
+      try { localStorage.setItem(sidebarPreference, String(next)); } catch { /* Session-only preference. */ }
+      return next;
+    });
+  };
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 760px)');
+    const resize = () => setSidebarCollapsed(media.matches ? true : sidebarDefault());
+    media.addEventListener('change', resize);
+    return () => media.removeEventListener('change', resize);
+  }, []);
 
   const onSaved = useCallback((board: Board) => {
     setBoards((previous) => previous.map((item) => item.id === board.id ? board : item)
@@ -53,13 +76,18 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
     const board = await api.create('Новая доска');
     setBoards((previous) => [board, ...previous]);
     setActive(board);
+    if (window.matchMedia('(max-width: 760px)').matches) setSidebarCollapsed(true);
   });
 
   const open = (id: string) => {
-    if (id === active?.id) return;
+    if (id === active?.id) {
+      if (window.matchMedia('(max-width: 760px)').matches) setSidebarCollapsed(true);
+      return;
+    }
     return run(async () => {
       await editorRef.current?.flush();
       setActive(await api.get(id));
+      if (window.matchMedia('(max-width: 760px)').matches) setSidebarCollapsed(true);
     });
   };
 
@@ -112,10 +140,12 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
   });
 
   return (
-    <main className="app-shell" inert={blocked}>
-      <aside className="sidebar" inert={blocked}>
+    <main className={`app-shell ${sidebarCollapsed ? 'app-shell--sidebar-collapsed' : ''}`} inert={blocked}>
+      {!sidebarCollapsed && <button className="sidebar-backdrop" aria-label="Закрыть список досок" onClick={toggleSidebar} />}
+      <aside id="boards-sidebar" className="sidebar" aria-label="Боковая панель" hidden={sidebarCollapsed}>
         <div className="brand"><img className="brand-icon" src="/favicon.svg" alt="" aria-hidden="true" />
-          <div><span className="brand-name">Bluvi<span>Board</span></span><small>Пространство для идей</small></div></div>
+          <div><span className="brand-name">Bluvi<span>Board</span></span><small>Пространство для идей</small></div>
+          <button className="sidebar-close" aria-label="Скрыть список досок" title="Скрыть список досок" onClick={toggleSidebar}><X size={17} /></button></div>
         <button className="primary-button" disabled={busy} onClick={create}>+ Новая доска</button>
         <div className="sidebar-heading">Мои доски <span>{boards.length}</span></div>
         <nav className="board-list" aria-label="Доски">
@@ -145,8 +175,10 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
       <div className={`workspace ${busy ? 'workspace--busy' : ''}`}>
         {error && <div className="error-banner" role="alert"><span>{error}</span><button disabled={busy} onClick={reloadList}>Обновить список</button></div>}
         {active ? <Suspense fallback={<div className="loading-overlay">Загрузка холста…</div>}>
-          <BoardEditor key={active.id} initial={active} onSaved={onSaved} onCopy={copy} editorRef={editorRef} disabled={busy || blocked} /></Suspense> :
-          <section className="empty-state"><img className="empty-icon" src="/favicon.svg" alt="" aria-hidden="true" /><h1>Место для вашей следующей идеи</h1>
+          <BoardEditor key={active.id} initial={active} onSaved={onSaved} onCopy={copy} editorRef={editorRef} disabled={busy || blocked}
+            sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} onNewBoard={create} /></Suspense> :
+          <section className="empty-state"><button className="empty-sidebar-toggle editor-icon-button" aria-label={sidebarCollapsed ? 'Показать боковую панель' : 'Свернуть боковую панель'} aria-expanded={!sidebarCollapsed} aria-controls="boards-sidebar" onClick={toggleSidebar}>{sidebarCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}</button>
+            <img className="empty-icon" src="/favicon.svg" alt="" aria-hidden="true" /><h1>Место для вашей следующей идеи</h1>
             <p>Рисуйте, пробуйте цвета и создавайте столько досок, сколько нужно.</p>
             <button className="primary-button" disabled={busy} onClick={create}>Создать первую доску</button></section>}
         {busy && <div className="loading-overlay" role="status">Загрузка…</div>}

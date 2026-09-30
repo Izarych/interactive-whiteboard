@@ -60,6 +60,112 @@ async function expectRendered(page: Page) {
   })).toBe(true);
 }
 
+test('floating controls leave the canvas full-height and sidebar collapse preserves drawing and its preference', async ({ page, request }) => {
+  const ids: string[] = [];
+  try {
+    await page.goto('/');
+    const title = `E2E floating tools ${Date.now()}`;
+    const id = await create(page, ids, title);
+    const canvas = page.getByTestId('canvas');
+    const sidebar = page.getByRole('complementary', { name: 'Боковая панель', includeHidden: true });
+    const expanded = (await canvas.boundingBox())!;
+    expect(expanded.y).toBe(0);
+    expect(expanded.height).toBe(1000);
+
+    await page.getByRole('button', { name: 'Цвет и толщина', exact: true }).click();
+    await page.getByRole('button', { name: 'Цвет #22c55e', exact: true }).click();
+    await page.getByRole('slider', { name: 'Толщина карандаша' }).fill('5');
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Цвет и толщина' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Фон доски', exact: true }).click();
+    await page.getByRole('button', { name: 'Клетка', exact: true }).click();
+    await page.getByRole('slider', { name: 'Размер клетки', exact: true }).fill('32');
+    await page.keyboard.press('Escape');
+    await expect(page.getByText('0 объектов', { exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Свернуть боковую панель', exact: true }).click();
+    await expect(sidebar).toBeHidden();
+    await expect.poll(async () => (await canvas.boundingBox())!.width).toBe(1440);
+    // This stroke passes through the free space between the floating header and toolbar.
+    await draw(page, [365, 28], [400, 33]);
+    await expect(page.getByText('1 объектов', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Цвет и толщина', exact: true }).click();
+    await draw(page, [100, 260], [220, 300]);
+    await expect(page.getByRole('dialog', { name: 'Цвет и толщина' })).toHaveCount(0);
+    await expect(page.getByText('2 объектов', { exact: true })).toBeVisible();
+    await expect(page.getByText('Сохранено', { exact: true })).toBeVisible();
+    const saved = await read(request, id);
+    expect(saved.document.background).toEqual({ pattern: 'grid', size: 32 });
+    expect(saved.document.elements).toHaveLength(2);
+    expect(saved.document.elements[0]).toMatchObject({ kind: 'stroke', color: '#22c55e', width: 5 });
+
+    await page.reload();
+    await expect(page.getByRole('textbox', { name: 'Название доски' })).toHaveValue(title);
+    await expect(sidebar).toBeHidden();
+    await expect(page.getByText('2 объектов', { exact: true })).toBeVisible();
+    await page.screenshot({ path: 'test-results/floating-tools.png', fullPage: true });
+    await page.getByRole('button', { name: 'Показать боковую панель', exact: true }).click();
+    await expect(sidebar).toBeVisible();
+    await expect.poll(async () => (await canvas.boundingBox())!.width).toBe(expanded.width);
+    expect((await read(request, id)).document).toEqual(saved.document);
+  } finally {
+    await cleanup(ids);
+  }
+});
+
+test('mobile menus fit the screen and the board drawer opens without shrinking the canvas', async ({ page, request }) => {
+  const ids: string[] = [];
+  try {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto('/');
+    const sidebar = page.getByRole('complementary', { name: 'Боковая панель', includeHidden: true });
+    await expect(sidebar).toBeHidden();
+    await page.getByRole('button', { name: 'Показать боковую панель', exact: true }).click();
+    await expect(sidebar).toBeVisible();
+    const title = `E2E mobile tools ${Date.now()}`;
+    const id = await create(page, ids, title);
+    await expect(sidebar).toBeHidden();
+    const canvas = page.getByTestId('canvas');
+    await expect.poll(async () => (await canvas.boundingBox())!.width).toBe(360);
+    expect((await canvas.boundingBox())!.height).toBe(800);
+    for (const [trigger, dialog] of [['Цвет и толщина', 'Цвет и толщина'], ['Фон доски', 'Настройки фона'], ['Действия доски', 'Действия доски']]) {
+      await page.getByRole('button', { name: trigger, exact: true }).click();
+      const box = (await page.getByRole('dialog', { name: dialog, exact: true }).boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(360);
+      await page.keyboard.press('Escape');
+    }
+    await expect(page.getByText('0 объектов', { exact: true })).toBeVisible();
+    await draw(page, [60, 280], [200, 320]);
+    await expect(page.getByText('Сохранено', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Показать боковую панель', exact: true }).click();
+    await expect(sidebar).toBeVisible();
+    expect((await canvas.boundingBox())!.width).toBe(360);
+    await page.screenshot({ path: 'test-results/mobile-board-drawer.png', fullPage: true });
+    await page.getByRole('navigation', { name: 'Доски' }).locator('.board-open').filter({ hasText: title }).click();
+    await expect(sidebar).toBeHidden();
+    await page.getByRole('button', { name: 'Показать боковую панель', exact: true }).click();
+    await page.getByRole('button', { name: 'Закрыть список досок', exact: true }).click({ position: { x: 350, y: 400 } });
+    await expect(sidebar).toBeHidden();
+    await page.getByRole('button', { name: 'Фон доски', exact: true }).click();
+    await page.getByRole('button', { name: 'Клетка', exact: true }).click();
+    await page.getByRole('slider', { name: 'Размер клетки', exact: true }).fill('37');
+    await page.screenshot({ path: 'test-results/mobile-floating-tools.png', fullPage: true });
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Действия доски', exact: true }).click();
+    const response = page.waitForResponse((item) => item.url().endsWith('/api/boards') && item.request().method() === 'POST');
+    await page.getByRole('button', { name: 'Новая доска', exact: true }).click();
+    ids.push((await (await response).json()).id);
+    await expect(page.getByText('0 объектов', { exact: true })).toBeVisible();
+    const saved = await read(request, id);
+    expect(saved.document.elements).toHaveLength(1);
+    expect(saved.document.background).toEqual({ pattern: 'grid', size: 37 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(360);
+  } finally {
+    await cleanup(ids);
+  }
+});
+
 test('drawing tools, autosave, undo/redo, independent boards, reload and deletion', async ({ page, request }) => {
   const ids: string[] = [];
   const errors: string[] = [];
@@ -69,8 +175,10 @@ test('drawing tools, autosave, undo/redo, independent boards, reload and deletio
     await page.goto('/');
     const firstTitle = `E2E drawing ${Date.now()}`;
     const id = await create(page, ids, firstTitle);
+    await page.getByRole('button', { name: 'Цвет и толщина', exact: true }).click();
     await page.getByRole('button', { name: 'Цвет #ef4444', exact: true }).click();
     await page.getByRole('slider', { name: 'Толщина карандаша' }).fill('8');
+    await page.keyboard.press('Escape');
     await draw(page, [150, 160], [340, 230]);
     await expect(page.getByText('1 объектов', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Прямоугольник', exact: true }).click();
@@ -121,9 +229,11 @@ test('drawing tools, autosave, undo/redo, independent boards, reload and deletio
     await expect(page.getByText('1 объектов', { exact: true })).toBeVisible();
 
     const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Действия доски', exact: true }).click();
     await page.getByRole('button', { name: 'Скачать PNG' }).click();
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBe(`${secondTitle}.png`);
+    await page.getByRole('button', { name: 'Действия доски', exact: true }).click();
     await page.getByRole('button', { name: 'Очистить', exact: true }).click();
     await expect(page.getByText('0 объектов', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Отменить', exact: true }).click();
@@ -154,8 +264,10 @@ test('square grid follows the camera, survives editing and reload, and stays ind
     const id = await create(page, ids, firstTitle);
     const canvas = page.getByTestId('canvas');
     await expect(canvas).toHaveAttribute('data-background', 'dots');
+    await page.getByRole('button', { name: 'Фон доски', exact: true }).click();
     await page.getByRole('button', { name: 'Клетка', exact: true }).click();
     await page.getByRole('slider', { name: 'Размер клетки', exact: true }).fill('32');
+    await page.keyboard.press('Escape');
     await expect(canvas).toHaveCSS('background-image', /linear-gradient/);
     await expect(canvas).toHaveCSS('background-size', '32px 32px, 32px 32px');
 
@@ -181,6 +293,7 @@ test('square grid follows the camera, survives editing and reload, and stays ind
     await expect(page.getByText('0 объектов', { exact: true })).toBeVisible();
     await expect(canvas).toHaveAttribute('data-background', 'grid');
     await page.getByRole('button', { name: 'Повторить', exact: true }).click();
+    await page.getByRole('button', { name: 'Действия доски', exact: true }).click();
     await page.getByRole('button', { name: 'Очистить', exact: true }).click();
     await expect(page.getByText('0 объектов', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Отменить', exact: true }).click();
@@ -189,10 +302,12 @@ test('square grid follows the camera, survives editing and reload, and stays ind
     const secondTitle = `E2E plain ${Date.now()}`;
     const secondId = await create(page, ids, secondTitle);
     await expect(canvas).toHaveAttribute('data-background', 'dots');
+    await page.getByRole('button', { name: 'Фон доски', exact: true }).click();
     await page.getByRole('button', { name: 'Чистый', exact: true }).click();
     await expect(canvas).toHaveCSS('background-image', 'none');
     await page.getByRole('navigation', { name: 'Доски' }).locator('.board-open').filter({ hasText: firstTitle }).click();
     await expect(canvas).toHaveAttribute('data-background', 'grid');
+    await page.getByRole('button', { name: 'Фон доски', exact: true }).click();
     await expect(page.getByRole('slider', { name: 'Размер клетки', exact: true })).toHaveValue('32');
     const renamed = `${firstTitle} renamed`;
     await page.getByRole('textbox', { name: 'Название доски' }).fill(renamed);
@@ -218,6 +333,7 @@ test('background size supports precise input and a slider for cells and dots, in
     await page.goto('/');
     const id = await create(page, ids, `E2E background size ${Date.now()}`);
     const canvas = page.getByTestId('canvas');
+    await page.getByRole('button', { name: 'Фон доски', exact: true }).click();
     await page.getByRole('button', { name: 'Клетка', exact: true }).click();
     const cellValue = page.getByRole('spinbutton', { name: 'Размер клетки: значение', exact: true });
     await cellValue.fill('37');
@@ -233,6 +349,11 @@ test('background size supports precise input and a slider for cells and dots, in
     await cellValue.press('Enter');
     await expect(cellValue).toHaveValue('96');
     await expect(canvas).toHaveCSS('background-size', '96px 96px, 96px 96px');
+    await cellValue.fill('8');
+    await page.getByRole('button', { name: 'Цвет и толщина', exact: true }).click();
+    await expect(canvas).toHaveCSS('background-size', '12px 12px, 12px 12px');
+    await page.getByRole('button', { name: 'Фон доски', exact: true }).click();
+    await expect(cellValue).toHaveValue('12');
 
     await page.getByRole('button', { name: 'Точки', exact: true }).click();
     await page.getByRole('slider', { name: 'Шаг точек', exact: true }).fill('53');
@@ -247,6 +368,7 @@ test('background size supports precise input and a slider for cells and dots, in
     await page.reload();
     await expect(canvas).toHaveAttribute('data-background', 'dots');
     await expect(canvas).toHaveCSS('background-size', '53px 53px');
+    await page.getByRole('button', { name: 'Фон доски', exact: true }).click();
     await expect(dotValue).toHaveValue('53');
     await page.getByRole('button', { name: 'Чистый', exact: true }).click();
     await expect(page.getByRole('slider', { name: /^(Размер клетки|Шаг точек)$/ })).toHaveCount(0);
@@ -326,6 +448,7 @@ test('paste a screenshot, move and resize it, export, undo deletion and reload s
     expect(resized.width / resized.height).toBeCloseTo(320 / 180);
 
     const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Действия доски', exact: true }).click();
     await page.getByRole('button', { name: 'Скачать PNG' }).click();
     const download = await downloadPromise;
     const pixels = await sharp((await download.path())!).ensureAlpha().raw().toBuffer();

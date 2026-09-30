@@ -49,6 +49,7 @@ test('guest registration confirms email, transfers drawings/images and supports 
     const title = `E2E account drawing ${Date.now()}`;
     const boardId = await createBoard(page, title);
     await draw(page);
+    await page.getByRole('button', { name: 'Фон доски', exact: true }).click();
     await page.getByRole('button', { name: 'Клетка', exact: true }).click();
     await page.getByRole('slider', { name: 'Размер клетки', exact: true }).fill('37');
     const png = await sharp({ create: { width: 100, height: 70, channels: 3, background: '#3b82f6' } }).png().toBuffer();

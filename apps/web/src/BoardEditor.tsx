@@ -8,26 +8,31 @@ import { api, errorMessage } from './api';
 import { loadImage } from './images';
 import { backgroundPatterns, DEFAULT_BACKGROUND } from './background';
 import { BackgroundSizeControl } from './BackgroundSizeControl';
+import { Circle, Download, Eraser, Grid2X2, Hand, ImagePlus, MoreHorizontal, MousePointer2, Palette, PanelLeftClose, PanelLeftOpen, Pencil, Plus, RectangleHorizontal, Redo2, Trash2, Undo2 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 export interface EditorHandle {
   flush: () => Promise<void>;
   snapshot: () => Board;
 }
 
-const tools: { id: Tool; label: string; icon: string }[] = [
-  { id: 'select', label: 'Выделение', icon: '↖' },
-  { id: 'pen', label: 'Карандаш', icon: '✎' },
-  { id: 'eraser', label: 'Ластик', icon: '⌫' },
-  { id: 'rectangle', label: 'Прямоугольник', icon: '▭' },
-  { id: 'ellipse', label: 'Эллипс', icon: '◯' },
-  { id: 'hand', label: 'Рука', icon: '✋' },
+const tools: { id: Tool; label: string; icon: LucideIcon }[] = [
+  { id: 'select', label: 'Выделение', icon: MousePointer2 },
+  { id: 'pen', label: 'Карандаш', icon: Pencil },
+  { id: 'eraser', label: 'Ластик', icon: Eraser },
+  { id: 'rectangle', label: 'Прямоугольник', icon: RectangleHorizontal },
+  { id: 'ellipse', label: 'Эллипс', icon: Circle },
+  { id: 'hand', label: 'Рука', icon: Hand },
 ];
 const colors = ['#202938', '#64748b', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6'];
 
-export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled }: {
+export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sidebarCollapsed, onToggleSidebar, onNewBoard }: {
   initial: Board; onSaved: (board: Board) => void; onCopy: () => void;
   editorRef: React.RefObject<EditorHandle | null>;
   disabled: boolean;
+  sidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
+  onNewBoard: () => void;
 }) {
   const { board, edit, flush, status, error, draftWarning, snapshot } = useBoard(initial, onSaved);
   const [tool, setTool] = useState<Tool>('pen');
@@ -42,7 +47,29 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled }: {
   const [imageError, setImageError] = useState('');
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [panel, setPanel] = useState<'pen' | 'background' | 'board' | null>(null);
+  const editorRoot = useRef<HTMLElement>(null);
   const background = board.document.background ?? DEFAULT_BACKGROUND;
+  const saveText = uploading ? 'Загрузка изображения…' : status === 'saved' ? 'Сохранено' : status === 'saving' ? 'Сохранение…' : status === 'pending' ? 'Есть изменения' : 'Не сохранено';
+  const togglePanel = (next: NonNullable<typeof panel>) => setPanel((previous) => previous === next ? null : next);
+  useEffect(() => {
+    if (!panel) return;
+    const closeOutside = (event: PointerEvent) => {
+      const root = editorRoot.current?.querySelector(`[data-editor-panel="${panel}"]`);
+      if (event.target instanceof Node && !root?.contains(event.target)) {
+        if (document.activeElement instanceof HTMLElement && root?.contains(document.activeElement)) document.activeElement.blur();
+        setPanel(null);
+      }
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      editorRoot.current?.querySelector<HTMLButtonElement>(`[data-editor-panel="${panel}"] > button[aria-controls]`)?.focus();
+      setPanel(null);
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    window.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('pointerdown', closeOutside); window.removeEventListener('keydown', escape); };
+  }, [panel]);
   useImperativeHandle(editorRef, () => ({ flush: async () => {
     while (pendingUploads.current) await uploads.current;
     await flush();
@@ -180,62 +207,57 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled }: {
   };
 
   return (
-    <section className="editor" inert={disabled}>
-      <header className="editor-header">
-        <input className="board-title" aria-label="Название доски" maxLength={120} value={board.title}
-          onChange={(event) => edit({ title: event.target.value })} />
-        <span className={`save-status save-status--${status}`} role="status">
-          <span className="status-dot" />
-          {uploading ? 'Загрузка изображения…' : status === 'saved' ? 'Сохранено' : status === 'saving' ? 'Сохранение…' : status === 'pending' ? 'Есть изменения' : 'Не сохранено'}
-        </span>
-        <button className="text-button export-button" disabled={exporting || uploading > 0} onClick={() => { void exportPng(); }}>{exporting ? 'Подготовка…' : 'Скачать PNG'}</button>
-      </header>
-      {(error || draftWarning) && <div className="error-banner" role="alert">
-        <span>{error || draftWarning} Рисунок остаётся в этой вкладке{draftWarning ? '.' : ' и в локальной резервной копии.'}</span>
-        {error && <><button onClick={() => { void flush().catch(() => {}); }}>Повторить сохранение</button>
-          <button onClick={onCopy}>Сохранить как новую доску</button></>}
-      </div>}
-      {imageError && <div className="error-banner" role="alert"><span>{imageError}</span><button onClick={() => setImageError('')}>Закрыть</button></div>}
-      <div className="toolbar" aria-label="Инструменты рисования">
-        <div className="tool-group">
-          {tools.map((item) => <button key={item.id} title={item.label} aria-label={item.label} aria-pressed={tool === item.id}
-            className={`tool-button ${tool === item.id ? 'active' : ''}`} onClick={() => setTool(item.id)}>{item.icon}</button>)}
-        </div>
-        <button className="text-button image-upload-button" title="Добавить изображение (или Ctrl+V)" onClick={() => fileInputRef.current?.click()}>▧ Изображение</button>
-        <input ref={fileInputRef} className="image-file-input" type="file" accept="image/png,image/jpeg,image/webp" multiple aria-label="Загрузить изображения"
-          onChange={(event) => { insertImages(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
-        <div className="tool-group colors">
-          {colors.map((value) => <button key={value} className={`color-button ${color === value ? 'active' : ''}`}
-            style={{ backgroundColor: value }} aria-label={`Цвет ${value}`} aria-pressed={color === value} onClick={() => setColor(value)} />)}
-          <label className="custom-color" title="Произвольный цвет">+
-            <input aria-label="Произвольный цвет" type="color" value={color} onChange={(event) => setColor(event.target.value)} />
-          </label>
-        </div>
-        <label className="width-control">Толщина
-          <input aria-label="Толщина карандаша" type="range" min="1" max="32" value={width} onChange={(event) => setWidth(Number(event.target.value))} />
-          <span>{width}</span>
-        </label>
-        <div className="tool-group history-tools">
-          <button className="tool-button" aria-label="Отменить" title="Отменить (Ctrl+Z)" disabled={!history.undo.length} onClick={undo}>↶</button>
-          <button className="tool-button" aria-label="Повторить" title="Повторить (Ctrl+Shift+Z)" disabled={!history.redo.length} onClick={redo}>↷</button>
-          <button className="text-button" disabled={!board.document.elements.length}
-            onClick={() => { if (window.confirm('Очистить холст? Это действие можно отменить.')) changeElements([]); }}>Очистить</button>
-        </div>
-        {tool === 'select' && board.document.elements.some((element) => element.id === selectedImageId && element.kind === 'image') &&
-          <button className="text-button" onClick={deleteSelected}>Удалить изображение</button>}
-      </div>
-      <div className="background-bar" aria-label="Настройки фона">
-        <span className="background-label">Фон доски</span>
-        <div className="background-options" role="group" aria-label="Рисунок фона">
-          {backgroundPatterns.map((pattern) => <button key={pattern.id} className={`background-option ${background.pattern === pattern.id ? 'active' : ''}`}
-            aria-pressed={background.pattern === pattern.id} onClick={() => changeBackground({ pattern: pattern.id })}>
-            <span className={`background-swatch background-swatch--${pattern.id}`} aria-hidden="true" />{pattern.label}
-          </button>)}
-        </div>
-        {background.pattern !== 'plain' && <BackgroundSizeControl background={background} onChange={(size) => changeBackground({ size })} />}
-      </div>
+    <section ref={editorRoot} className="editor" inert={disabled}>
       <Canvas elements={board.document.elements} background={background} tool={tool} color={color} width={width} stageRef={stageRef} onChange={changeElements}
         selectedImageId={selectedImageId} onSelectImage={setSelectedImageId} onImageFiles={insertImages} />
+      <div className="editor-chrome">
+        <header className="board-info-panel">
+          <button className="editor-icon-button" aria-label={sidebarCollapsed ? 'Показать боковую панель' : 'Свернуть боковую панель'} aria-expanded={!sidebarCollapsed} aria-controls="boards-sidebar" title="Список досок" onClick={onToggleSidebar}>{sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}</button>
+          <div className="board-name-block"><input className="board-title" aria-label="Название доски" maxLength={120} value={board.title} onChange={(event) => edit({ title: event.target.value })} />
+            <span className={`save-status save-status--${status}`} role="status"><span className="status-dot" />{saveText}</span></div>
+          <span className="editor-divider" />
+          <button className="editor-icon-button" aria-label="Отменить" title="Отменить (Ctrl+Z)" disabled={!history.undo.length} onClick={undo}><Undo2 size={18} /></button>
+          <button className="editor-icon-button" aria-label="Повторить" title="Повторить (Ctrl+Shift+Z)" disabled={!history.redo.length} onClick={redo}><Redo2 size={18} /></button>
+          <div className="editor-popover-anchor" data-editor-panel="board">
+            <button className={`editor-icon-button ${panel === 'board' ? 'active' : ''}`} aria-label="Действия доски" aria-expanded={panel === 'board'} aria-controls="board-actions" title="Действия доски" onClick={() => togglePanel('board')}><MoreHorizontal size={19} /></button>
+            {panel === 'board' && <section id="board-actions" className="editor-popover board-actions" role="dialog" aria-label="Действия доски">
+              <button onClick={() => { setPanel(null); onNewBoard(); }}><Plus size={17} />Новая доска</button>
+              <button disabled={exporting || uploading > 0} onClick={() => { setPanel(null); void exportPng(); }}><Download size={17} />Скачать PNG</button>
+              <button disabled={!board.document.elements.length} onClick={() => { if (window.confirm('Очистить холст? Это действие можно отменить.')) { changeElements([]); setPanel(null); } }}><Trash2 size={17} />Очистить</button>
+              {tool === 'select' && board.document.elements.some((element) => element.id === selectedImageId && element.kind === 'image') && <button onClick={() => { deleteSelected(); setPanel(null); }}><Eraser size={17} />Удалить изображение</button>}
+            </section>}
+          </div>
+        </header>
+        <div className="tool-dock" role="toolbar" aria-label="Инструменты рисования">
+          {tools.map((item) => <button key={item.id} title={item.label} aria-label={item.label} aria-pressed={tool === item.id} className={`editor-icon-button ${tool === item.id ? 'active' : ''}`} onClick={() => { setTool(item.id); setPanel(null); }}><item.icon size={19} strokeWidth={1.8} /></button>)}
+          <span className="editor-divider" />
+          <div className="editor-popover-anchor" data-editor-panel="pen">
+            <button className={`editor-icon-button pen-settings-button ${panel === 'pen' ? 'active' : ''}`} aria-label="Цвет и толщина" title="Цвет и толщина" aria-expanded={panel === 'pen'} aria-controls="pen-settings" onClick={() => togglePanel('pen')}><Palette size={19} /><span className="current-color" style={{ backgroundColor: color }} /></button>
+            {panel === 'pen' && <section id="pen-settings" className="editor-popover pen-settings" role="dialog" aria-label="Цвет и толщина">
+              <h2>Карандаш</h2><div className="colors">{colors.map((value) => <button key={value} className={`color-button ${color === value ? 'active' : ''}`} style={{ backgroundColor: value }} aria-label={`Цвет ${value}`} aria-pressed={color === value} onClick={() => setColor(value)} />)}
+                <label className="custom-color" title="Произвольный цвет">+<input aria-label="Произвольный цвет" type="color" value={color} onChange={(event) => setColor(event.target.value)} /></label></div>
+              <label className="width-control">Толщина<input aria-label="Толщина карандаша" type="range" min="1" max="32" value={width} onChange={(event) => setWidth(Number(event.target.value))} /><span>{width}</span></label>
+            </section>}
+          </div>
+          <button className="editor-icon-button" aria-label="Добавить изображение" title="Добавить изображение (или Ctrl+V)" onClick={() => { setPanel(null); fileInputRef.current?.click(); }}><ImagePlus size={19} /></button>
+          <div className="editor-popover-anchor" data-editor-panel="background">
+            <button className={`editor-icon-button ${panel === 'background' ? 'active' : ''}`} aria-label="Фон доски" title="Фон доски" aria-expanded={panel === 'background'} aria-controls="background-settings" onClick={() => togglePanel('background')}><Grid2X2 size={19} /></button>
+            {panel === 'background' && <section id="background-settings" className="editor-popover background-settings" role="dialog" aria-label="Настройки фона">
+              <h2>Фон доски</h2><div className="background-options" role="group" aria-label="Рисунок фона">{backgroundPatterns.map((pattern) => <button key={pattern.id} className={`background-option ${background.pattern === pattern.id ? 'active' : ''}`} aria-pressed={background.pattern === pattern.id} onClick={() => changeBackground({ pattern: pattern.id })}><span className={`background-swatch background-swatch--${pattern.id}`} aria-hidden="true" />{pattern.label}</button>)}</div>
+              {background.pattern !== 'plain' && <BackgroundSizeControl background={background} onChange={(size) => changeBackground({ size })} />}
+            </section>}
+          </div>
+        </div>
+      </div>
+      <input ref={fileInputRef} className="image-file-input" type="file" accept="image/png,image/jpeg,image/webp" multiple aria-label="Загрузить изображения" onChange={(event) => { insertImages(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
+      <div className="editor-alerts">
+        {(error || draftWarning) && <div className="error-banner" role="alert">
+          <span>{error || draftWarning} Рисунок остаётся в этой вкладке{draftWarning ? '.' : ' и в локальной резервной копии.'}</span>
+          {error && <><button onClick={() => { void flush().catch(() => {}); }}>Повторить сохранение</button>
+            <button onClick={onCopy}>Сохранить как новую доску</button></>}
+        </div>}
+        {imageError && <div className="error-banner" role="alert"><span>{imageError}</span><button onClick={() => setImageError('')}>Закрыть</button></div>}
+      </div>
       <footer className="editor-footer"><span>{board.document.elements.length} объектов</span>
         <span>{tool === 'select' ? 'Перетаскивайте изображение · Уголки — размер · Delete — удалить' :
           tool === 'eraser' ? 'Ластик удаляет объекты целиком' : 'Ctrl+V — вставить скриншот'}</span></footer>
