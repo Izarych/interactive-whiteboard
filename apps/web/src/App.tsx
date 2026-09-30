@@ -7,9 +7,12 @@ import { ProfilePanel } from './ProfilePanel';
 import { clearImageCache } from './images';
 import Workspace from './Workspace';
 import { usePageMetadata } from './seo';
+import { usePwa } from './pwa';
+import { PwaUpdateNotice } from './PwaControls';
 const AdminPanel = lazy(() => import('./AdminPanel'));
 
 function App() {
+  const { updating } = usePwa();
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [bootError, setBootError] = useState('');
   const [auth, setAuth] = useState<{ mode: AuthMode; email?: string } | null>(null);
@@ -67,12 +70,12 @@ function App() {
 
   const active = session.kind !== 'anonymous';
   const needsAdminLogin = admin && (session.kind !== 'user' || session.user.role !== 'admin');
-  return <>
+  return <><div className="pwa-app" inert={updating}>
     {active && !needsAdminLogin && (admin ? session.kind === 'user' && session.user.role === 'admin' ? <Suspense fallback={<div className="loading-overlay">Открываем панель управления…</div>}>
-      <AdminPanel user={session.user} blocked={profile || !!auth} onBack={() => navigate(false)} onProfile={() => setProfile(true)}
+      <AdminPanel user={session.user} blocked={profile || !!auth || updating} onBack={() => navigate(false)} onProfile={() => setProfile(true)}
         onLogout={async () => { await api.logout(); changeSession(await api.session()); }} /></Suspense>
       : <div className="auth-shell"><section className="auth-card"><h1>Недостаточно прав</h1><p className="auth-subtitle">Панель управления доступна только администратору.</p><button className="primary-button" onClick={() => navigate(false)}>Вернуться к доскам</button></section></div>
-      : <Workspace key={`${session.workspaceId}:${session.kind}`} session={session} blocked={!!auth || profile}
+      : <Workspace key={`${session.workspaceId}:${session.kind}`} session={session} blocked={!!auth || profile || updating}
         onAuth={(mode) => setAuth({ mode })} onProfile={() => setProfile(true)} onSession={changeSession} onAdmin={() => navigate(true)} />)}
     {(!active || auth || needsAdminLogin) && <AuthPanel key={admin ? 'admin-auth' : 'public-auth'} adminOnly={admin} session={session} initialMode={auth?.mode ?? 'login'} initialEmail={auth?.email}
       onDone={changeSession} onClose={active && !needsAdminLogin ? () => setAuth(null) : undefined}
@@ -84,7 +87,7 @@ function App() {
     {profile && session.kind === 'user' && <ProfilePanel user={session.user} onSaved={saveProfile} onClose={() => setProfile(false)}
       onResetPassword={() => { setProfile(false); setAuth({ mode: 'forgot', email: session.user.email }); }}
       onLogout={async () => { await api.logout(); changeSession(await api.session()); }} />}
-  </>;
+  </div><PwaUpdateNotice /></>;
 }
 
 export default App;

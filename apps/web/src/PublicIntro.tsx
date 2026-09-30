@@ -1,3 +1,5 @@
+import { PwaInstallButton } from './PwaControls';
+
 export function PublicIntro() {
   return <aside className="public-intro" itemScope itemType="https://schema.org/WebApplication">
     <meta itemProp="name" content="BluviBoard" />
@@ -14,5 +16,6 @@ export function PublicIntro() {
       <li><span>✓</span><div><strong>Сохраняйте свои идеи</strong><small>Несколько досок и автосохранение</small></div></li>
     </ul>
     <p className="public-guest-note">Начните как гость — доски перейдут в ваш аккаунт при регистрации.</p>
+    <PwaInstallButton />
   </aside>;
 }

@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "node scripts/generate-social-image.cjs",
+    "predev": "node scripts/generate-assets.cjs",
     "dev": "vite --host 0.0.0.0",
-    "build": "node scripts/generate-social-image.cjs && tsc -b && vite build",
+    "build": "node scripts/generate-assets.cjs && tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {

@@ -3,6 +3,7 @@ import type Konva from 'konva';
 import type { Board, BoardBackground, DrawingElement, ImageElement } from '@whiteboard/shared';
 import { Canvas } from './Canvas';
 import type { Tool } from './Canvas';
+import type { CanvasHandle } from './Canvas';
 import { useBoard } from './useBoard';
 import { api, errorMessage } from './api';
 import { loadImage } from './images';
@@ -12,7 +13,7 @@ import { Circle, Download, Eraser, Grid2X2, Hand, ImagePlus, MoreHorizontal, Mou
 import type { LucideIcon } from 'lucide-react';
 
 export interface EditorHandle {
-  flush: () => Promise<void>;
+  flush: (forUpdate?: boolean) => Promise<void>;
   snapshot: () => Board;
 }
 
@@ -40,9 +41,11 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
   const [width, setWidth] = useState(4);
   const [history, setHistory] = useState<{ undo: DrawingElement[][]; redo: DrawingElement[][] }>({ undo: [], redo: [] });
   const stageRef = useRef<Konva.Stage | null>(null);
+  const canvasRef = useRef<CanvasHandle | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploads = useRef<Promise<void>>(Promise.resolve());
   const pendingUploads = useRef(0);
+  const failedUpload = useRef(false);
   const [uploading, setUploading] = useState(0);
   const [imageError, setImageError] = useState('');
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
@@ -70,8 +73,10 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
     window.addEventListener('keydown', escape);
     return () => { document.removeEventListener('pointerdown', closeOutside); window.removeEventListener('keydown', escape); };
   }, [panel]);
-  useImperativeHandle(editorRef, () => ({ flush: async () => {
+  useImperativeHandle(editorRef, () => ({ flush: async (forUpdate) => {
+    canvasRef.current?.finish();
     while (pendingUploads.current) await uploads.current;
+    if (forUpdate && failedUpload.current) throw new Error('Изображение не загрузилось. Повторите загрузку или закройте сообщение об ошибке.');
     await flush();
   }, snapshot }));
 
@@ -91,11 +96,13 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
     const stage = stageRef.current;
     if (!stage) return;
     setImageError('');
+    failedUpload.current = false;
     const scale = stage.scaleX();
     const center = position ?? { x: (stage.width() / 2 - stage.x()) / scale, y: (stage.height() / 2 - stage.y()) / scale };
     const viewport = { width: stage.width(), height: stage.height() };
     files.forEach((file, index) => {
       if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024) {
+        failedUpload.current = true;
         setImageError('Выберите PNG, JPEG или WebP размером до 10 МБ.');
         return;
       }
@@ -116,6 +123,7 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
           setSelectedImageId(image.id);
           setTool('select');
         } catch (reason) {
+          failedUpload.current = true;
           setImageError(errorMessage(reason));
         } finally {
           pendingUploads.current -= 1;
@@ -208,7 +216,7 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
 
   return (
     <section ref={editorRoot} className="editor" inert={disabled}>
-      <Canvas elements={board.document.elements} background={background} tool={tool} color={color} width={width} stageRef={stageRef} onChange={changeElements}
+      <Canvas elements={board.document.elements} background={background} tool={tool} color={color} width={width} stageRef={stageRef} canvasRef={canvasRef} onChange={changeElements}
         selectedImageId={selectedImageId} onSelectImage={setSelectedImageId} onImageFiles={insertImages} />
       <div className="editor-chrome">
         <header className="board-info-panel">
@@ -256,7 +264,7 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
           {error && <><button onClick={() => { void flush().catch(() => {}); }}>Повторить сохранение</button>
             <button onClick={onCopy}>Сохранить как новую доску</button></>}
         </div>}
-        {imageError && <div className="error-banner" role="alert"><span>{imageError}</span><button onClick={() => setImageError('')}>Закрыть</button></div>}
+        {imageError && <div className="error-banner" role="alert"><span>{imageError}</span><button onClick={() => { failedUpload.current = false; setImageError(''); }}>Закрыть</button></div>}
       </div>
       <footer className="editor-footer"><span>{board.document.elements.length} объектов</span>
         <span>{tool === 'select' ? 'Перетаскивайте изображение · Уголки — размер · Delete — удалить' :

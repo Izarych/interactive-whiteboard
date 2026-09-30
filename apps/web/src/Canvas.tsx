@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Ellipse, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from 'react-konva';
 import type Konva from 'konva';
 import type { BoardBackground, DrawnElement, DrawingElement, ImageElement } from '@whiteboard/shared';
@@ -6,7 +6,9 @@ import { loadImage } from './images';
 import { backgroundImages } from './background';
 
 export type Tool = 'pen' | 'eraser' | 'rectangle' | 'ellipse' | 'hand' | 'select';
+export interface CanvasHandle { finish: () => void }
 interface Props {
+  canvasRef?: React.RefObject<CanvasHandle | null>;
   elements: DrawingElement[];
   background: BoardBackground;
   tool: Tool;
@@ -64,7 +66,7 @@ function CanvasImage({ element, draggable, onChange }: {
   </>;
 }
 
-export function Canvas({ elements, background, tool, color, width, onChange, stageRef, selectedImageId, onSelectImage, onImageFiles }: Props) {
+export function Canvas({ elements, background, tool, color, width, onChange, stageRef, selectedImageId, onSelectImage, onImageFiles, canvasRef }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 1, height: 1 });
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
@@ -103,6 +105,7 @@ export function Canvas({ elements, background, tool, color, width, onChange, sta
     // An interrupted pan must not leave Konva dragging on the next tool.
     stageRef.current?.stopDrag();
   };
+  useImperativeHandle(canvasRef, () => ({ finish: () => finish() }));
 
   const zoom = (scale: number, anchor = { x: size.width / 2, y: size.height / 2 }) => {
     const next = Math.max(0.2, Math.min(4, scale));

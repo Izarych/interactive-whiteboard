@@ -3,6 +3,8 @@ import type { ActiveSession, Board, BoardSummary, SessionInfo } from '@whiteboar
 import { api, errorMessage } from './api';
 import type { EditorHandle } from './BoardEditor';
 import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { PwaInstallButton } from './PwaControls';
+import { registerUpdateGuard } from './pwa';
 
 const BoardEditor = lazy(() => import('./BoardEditor').then((module) => ({ default: module.BoardEditor })));
 const sidebarPreference = 'bluviboard:sidebar-collapsed';
@@ -24,7 +26,7 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const editorRef = useRef<EditorHandle | null>(null);
-  const operation = useRef(false);
+  const operation = useRef<Promise<void> | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(sidebarDefault);
   const toggleSidebar = () => {
     setSidebarCollapsed((previous) => {
@@ -62,13 +64,21 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
     return () => { cancelled = true; };
   }, []);
 
-  const run = async (action: () => Promise<void>) => {
-    if (operation.current || busy) return;
-    operation.current = true;
+  useEffect(() => registerUpdateGuard(async () => {
+    await operation.current;
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await editorRef.current?.flush(true);
+  }), []);
+
+  const run = (action: () => Promise<void>) => {
+    if (operation.current || busy) return Promise.resolve();
     setBusy(true);
     setError('');
-    try { await action(); } catch (reason) { setError(errorMessage(reason)); }
-    finally { setBusy(false); operation.current = false; }
+    operation.current = (async () => {
+      try { await action(); } catch (reason) { setError(errorMessage(reason)); }
+      finally { setBusy(false); operation.current = null; }
+    })();
+    return operation.current;
   };
 
   const create = () => run(async () => {
@@ -170,6 +180,7 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
           </> : <button disabled={busy} onClick={() => { void logout(); }}>Выйти</button>}</div>
           {session.user?.role === 'admin' && <button className="admin-entry-button" disabled={busy} onClick={() => { void run(async () => { await editorRef.current?.flush(); onAdmin(); }); }}>Админ-панель →</button>}
         </div>
+        <PwaInstallButton />
         <div className="sidebar-footer">Всё сохраняется автоматически<br /><span>Ваши идеи остаются с вами</span></div>
       </aside>
       <div className={`workspace ${busy ? 'workspace--busy' : ''}`}>

@@ -41,6 +41,25 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .empty-list { padding: 0 10px; font-size: 13px; color: #9298a6; }
 .sidebar-footer { border-top: 1px solid #eeeef4; padding: 17px 8px 0; color: #747b8d; font-size: 11px; line-height: 1.9; }
 .sidebar-footer span { color: #a0a5b3; }
+.pwa-install { margin: 14px 0; }
+.pwa-install-button { display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid #dce3f3; border-radius: 9px; color: #6366f1; background: #fff; font-size: 12px; }
+.pwa-install-button:hover:not(:disabled) { background: #f0f3ff; }
+.sidebar .pwa-install { flex-shrink: 0; margin: 0 4px 14px; }
+.sidebar .pwa-install-button { width: 100%; justify-content: center; font-size: 11px; padding: 9px 7px; }
+.pwa-install-help { margin-top: 10px; padding: 12px; border: 1px solid #e2e7f3; border-radius: 10px; background: #f8faff; }
+.pwa-install-help p { margin: 0 0 9px; color: #8390a5; font-size: 11px; line-height: 1.7; }
+.pwa-install-help button { color: #6366f1; padding: 3px 0; font-size: 11px; }
+.pwa-update { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); width: min(550px, calc(100% - 28px)); z-index: 150; display: flex; align-items: center; gap: 16px; padding: 16px 18px; border: 1px solid #dce3f3; border-radius: 14px; background: #fff; box-shadow: 0 8px 35px #20293822; }
+.pwa-update > div:first-child { flex: 1; min-width: 0; }
+.pwa-update strong { font-size: 12px; }
+.pwa-update p { margin: 5px 0 0; color: #8390a5; font-size: 11px; line-height: 1.6; }
+.pwa-update [role="alert"] p { color: #b65133; }
+.pwa-update-actions { display: flex; align-items: center; gap: 8px; }
+.pwa-update-actions button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 8px; font-size: 11px; color: #8390a5; }
+.pwa-update-actions button:first-child { color: #fff; background: #6366f1; }
+@media (max-width: 550px) {
+  .pwa-update { align-items: flex-start; flex-direction: column; gap: 10px; padding: 14px; }
+}
 .sidebar-account { padding: 13px 4px; margin-top: 12px; border-top: 1px solid #eeeef4; }
 .account-button { display: flex; align-items: center; gap: 9px; padding: 6px 4px; width: 100%; min-width: 0; text-align: left; border-radius: 8px; }
 .account-button:hover { background: #f6f7fb; }
