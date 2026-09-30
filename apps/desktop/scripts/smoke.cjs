@@ -25,12 +25,17 @@ function launch() {
 }
 
 async function connect() {
-  for (let attempt = 0; attempt < 60; attempt++) {
+  const deadline = Date.now() + 90000;
+  let lastError;
+  while (Date.now() < deadline) {
     if (child.exitCode !== null) throw new Error(`Application exited early: ${child.exitCode}`);
-    try { return await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 1000 }); }
-    catch { await new Promise((resolve) => setTimeout(resolve, 500)); }
+    try { return await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 15000 }); }
+    catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
   }
-  throw new Error('WebView2 debugging endpoint did not start');
+  throw new Error(`Unable to connect to WebView2: ${lastError?.message || 'endpoint unavailable'}`);
 }
 
 async function exited(process) {
@@ -119,12 +124,17 @@ async function main() {
 
 main().catch(async (error) => {
   console.error(error);
+  console.log(`::error title=Native Windows smoke::${String(error.stack).replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A')}`);
   const artifacts = path.join(root, 'apps/desktop/artifacts');
   fs.mkdirSync(artifacts, { recursive: true });
   if (page && !page.isClosed()) await page.screenshot({ path: path.join(artifacts, 'native-smoke.png') }).catch(() => {});
   process.exitCode = 1;
 }).finally(async () => {
   releaseSave();
-  if (child && child.exitCode === null) child.kill();
+  if (child && child.exitCode === null && child.signalCode === null) {
+    const stopped = new Promise((resolve) => child.once('exit', resolve));
+    child.kill();
+    await stopped;
+  }
   if (browser) await browser.close().catch(() => {});
 });
