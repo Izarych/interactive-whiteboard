@@ -46,10 +46,9 @@ export default function AdminPanel({ user, blocked, onBack, onProfile, onLogout 
   const generation = useRef(0);
 
   useEffect(() => {
-    document.title = 'BluviBoard · Панель управления';
     const pop = () => { setSection(routeSection()); setPage(1); setSearch(''); };
     window.addEventListener('popstate', pop);
-    return () => { window.removeEventListener('popstate', pop); document.title = 'BluviBoard — доска для ваших идей'; };
+    return () => { window.removeEventListener('popstate', pop); };
   }, []);
   const load = useCallback(async () => {
     const version = ++generation.current;

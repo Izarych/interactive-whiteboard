@@ -31,7 +31,7 @@ async function start() {
     cwd: path.resolve(__dirname, '../apps/server'),
     env: { ...process.env, DATABASE_URL: connectionString, PORT: String(port), AUTH_SECRET: 'test-auth-secret-that-is-at-least-thirty-two-characters',
       WEB_ORIGIN: 'http://localhost:5175', STORAGE_PROVIDER: 'local', STORAGE_LOCAL_PATH: directory,
-      SMTP_HOST: 'localhost', SMTP_PORT: '1025', SMTP_SECURE: 'false', LEGACY_OWNER_EMAIL: legacyEmail, COOKIE_SECURE: 'false' },
+      SMTP_HOST: '127.0.0.1', SMTP_PORT: '1025', SMTP_SECURE: 'false', LEGACY_OWNER_EMAIL: legacyEmail, COOKIE_SECURE: 'false' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   server.stdout.on('data', (data) => { logs += data; });

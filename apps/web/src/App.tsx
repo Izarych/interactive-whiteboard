@@ -6,6 +6,7 @@ import type { AuthMode } from './AuthPanel';
 import { ProfilePanel } from './ProfilePanel';
 import { clearImageCache } from './images';
 import Workspace from './Workspace';
+import { usePageMetadata } from './seo';
 const AdminPanel = lazy(() => import('./AdminPanel'));
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
   const [admin, setAdmin] = useState(window.location.pathname.startsWith('/admin'));
   const channel = useRef<BroadcastChannel | null>(null);
   const bootRequest = useRef(0);
+  usePageMetadata(admin || (!!session && session.kind !== 'anonymous'), admin);
 
   const load = useCallback(async () => {
     const sequence = ++bootRequest.current;
@@ -29,7 +31,10 @@ function App() {
   }, []);
   useEffect(() => { void load(); return () => { bootRequest.current += 1; }; }, [load]);
   useEffect(() => { const pop = () => setAdmin(window.location.pathname.startsWith('/admin')); window.addEventListener('popstate', pop); return () => window.removeEventListener('popstate', pop); }, []);
-  const navigate = (show: boolean) => { setAdmin(show); window.history.pushState(null, '', show ? '/admin' : '/'); };
+  const navigate = (show: boolean) => {
+    if (show) { window.location.assign('/admin'); return; }
+    setAdmin(false); window.history.pushState(null, '', '/');
+  };
 
   useEffect(() => {
     const refresh = () => {

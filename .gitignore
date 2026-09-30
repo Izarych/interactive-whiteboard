@@ -7,6 +7,7 @@ apps/server/data/
 .test-data/
 deploy/*.env
 deploy/*.key
+apps/web/public/og-image.png
 *.tsbuildinfo
 .env
 .env.*

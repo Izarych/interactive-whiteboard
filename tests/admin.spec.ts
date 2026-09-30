@@ -101,6 +101,7 @@ test('administrator command, analytics, user editing, board preview, guest trans
     await expect(deniedPage.getByRole('heading', { name: 'Вход в админ-панель', exact: true })).toBeVisible();
     await expect(deniedPage.getByRole('button', { name: 'Регистрация', exact: true })).toHaveCount(0);
     await expect(deniedPage.getByRole('button', { name: 'Продолжить как гость', exact: true })).toHaveCount(0);
+    await expect(deniedPage.getByRole('button', { name: 'Забыли пароль?', exact: true })).toHaveCount(0);
     await nav.getByRole('button', { name: 'Журнал действий', exact: true }).click();
     await expect(page.getByRole('cell', { name: 'Доски гостя переданы аккаунту', exact: true })).toBeVisible();
     await nav.getByRole('button', { name: 'Почта', exact: true }).click();

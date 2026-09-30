@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ActiveSession, EmailChallenge, SessionInfo } from '@whiteboard/shared';
 import { api, errorMessage } from './api';
 import { AvatarPicker } from './AvatarPicker';
+import { PublicIntro } from './PublicIntro';
 
 export type AuthMode = 'login' | 'register' | 'verify' | 'forgot' | 'reset';
 interface PendingRegistration extends EmailChallenge { workspaceId: string; retryAt: number }
@@ -107,7 +108,10 @@ export function AuthPanel({ session, initialMode = 'login', initialEmail = '', o
     reset: `Введите код из письма на ${email} и придумайте новый пароль.`,
   };
 
-  return <div className={`auth-shell ${onClose ? 'auth-shell--modal' : ''}`}>
+  const publicPage = !adminOnly && !onClose;
+  const Heading = publicPage ? 'h2' : 'h1';
+  return <div className={`auth-shell ${onClose ? 'auth-shell--modal' : ''} ${publicPage ? 'auth-shell--public' : ''}`}>
+    {publicPage && <PublicIntro />}
     <section className="auth-card" role={onClose ? 'dialog' : undefined} aria-modal={onClose ? true : undefined} aria-label="Вход и регистрация">
       {onClose && <button className="modal-close" type="button" aria-label="Вернуться к доске" disabled={busy} onClick={onClose}>×</button>}
       <div className="auth-brand"><img src="/favicon.svg" alt="" /><span>Bluvi<span>Board</span></span></div>
@@ -115,7 +119,7 @@ export function AuthPanel({ session, initialMode = 'login', initialEmail = '', o
         <button className={mode === 'login' ? 'active' : ''} disabled={busy} onClick={() => switchMode('login')}>Вход</button>
         <button className={mode === 'register' ? 'active' : ''} disabled={busy} onClick={() => switchMode('register')}>Регистрация</button>
       </div>}
-      <h1>{adminOnly && mode === 'login' ? 'Вход в админ-панель' : titles[mode]}</h1><p className="auth-subtitle">{adminOnly && mode === 'login' ? 'Введите данные административного аккаунта BluviBoard.' : subtitles[mode]}</p>
+      <Heading>{adminOnly && mode === 'login' ? 'Вход в админ-панель' : titles[mode]}</Heading><p className="auth-subtitle">{adminOnly && mode === 'login' ? 'Введите данные административного аккаунта BluviBoard.' : subtitles[mode]}</p>
       {error && <div className="form-error" role="alert">{error}</div>}
       {notice && <div className="form-notice" role="status">{notice}</div>}
       <form onSubmit={(event) => { event.preventDefault(); void submit(); }}>
@@ -132,7 +136,7 @@ export function AuthPanel({ session, initialMode = 'login', initialEmail = '', o
             {mode !== 'login' && <small>Не менее 8 символов</small>}
           </label>}
           {mode === 'reset' && <label className="form-label">Повторите пароль<input type="password" autoComplete="new-password" minLength={8} maxLength={128} required value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></label>}
-          {mode === 'login' && <button type="button" className="auth-link forgot-link" onClick={() => switchMode('forgot')}>Забыли пароль?</button>}
+          {!adminOnly && mode === 'login' && <button type="button" className="auth-link forgot-link" onClick={() => switchMode('forgot')}>Забыли пароль?</button>}
           <button className="primary-button form-submit" type="submit">{busy ? 'Подождите…' : mode === 'login' ? 'Войти' : mode === 'register' ? 'Создать аккаунт' : mode === 'verify' ? 'Подтвердить почту' : mode === 'forgot' ? 'Отправить код' : 'Сохранить новый пароль'}</button>
         </fieldset>
       </form>

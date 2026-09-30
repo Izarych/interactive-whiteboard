@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse"><stop stop-color="#eff6ff"/><stop offset="1" stop-color="#eeeaff"/></linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="90" y2="90"><stop stop-color="#3995ff"/><stop offset="1" stop-color="#5949db"/></linearGradient>
+    <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse"><path d="M34 0H0V34" fill="none" stroke="#e2e8f5" stroke-width="1"/></pattern>
+  </defs>
+  <rect width="1200" height="630" fill="url(#page)"/>
+  <circle cx="1140" cy="80" r="270" fill="#e0e9ff" opacity=".5"/>
+  <rect x="72" y="76" width="72" height="72" rx="21" fill="url(#blue)"/>
+  <path d="M98 95V131M98 95H110C125 95 125 112 110 112H98M98 112H112C128 112 128 131 112 131H98" fill="none" stroke="white" stroke-width="6" stroke-linecap="round"/>
+  <text x="165" y="125" font-family="DejaVu Sans,Arial,sans-serif" font-size="43" font-weight="700" fill="#202938">BluviBoard</text>
+  <text x="72" y="260" font-family="DejaVu Sans,Arial,sans-serif" font-size="49" font-weight="700" fill="#202938">Место для вашей</text>
+  <text x="72" y="325" font-family="DejaVu Sans,Arial,sans-serif" font-size="49" font-weight="700" fill="#2563eb">следующей идеи</text>
+  <text x="75" y="386" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" fill="#7d879b">Рисунки, заметки и скриншоты</text>
+  <text x="75" y="424" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" fill="#7d879b">в одном пространстве.</text>
+  <rect x="74" y="481" width="210" height="48" rx="15" fill="#2563eb"/>
+  <text x="98" y="512" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" fill="white">bluviboard.ru</text>
+  <rect x="660" y="100" width="462" height="420" rx="25" fill="#fff" stroke="#dde5f2"/>
+  <rect x="684" y="166" width="414" height="330" rx="12" fill="url(#grid)"/>
+  <circle cx="692" cy="132" r="7" fill="#6366f1"/><circle cx="717" cy="132" r="7" fill="#3b82f6"/><circle cx="742" cy="132" r="7" fill="#22c55e"/><circle cx="767" cy="132" r="7" fill="#f97316"/>
+  <path d="M728 254C789 176 878 307 954 242S1036 247 1061 288" fill="none" stroke="#6366f1" stroke-width="8" stroke-linecap="round"/>
+  <rect x="736" y="339" width="129" height="91" rx="3" fill="none" stroke="#3b82f6" stroke-width="6"/>
+  <circle cx="968" cy="386" r="46" fill="none" stroke="#34b7a0" stroke-width="6"/>
+</svg>
