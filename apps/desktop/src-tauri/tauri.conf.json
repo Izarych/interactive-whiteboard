@@ -1,0 +1,50 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "BluviBoard",
+  "version": "../package.json",
+  "identifier": "ru.bluviboard.desktop",
+  "build": {
+    "frontendDist": "../launcher",
+    "beforeDevCommand": "node scripts/prepare.cjs",
+    "beforeBuildCommand": "node scripts/prepare.cjs"
+  },
+  "app": {
+    "windows": [{
+      "label": "main",
+      "create": false,
+      "title": "BluviBoard",
+      "width": 1280,
+      "height": 850,
+      "minWidth": 800,
+      "minHeight": 600,
+      "center": true,
+      "useHttpsScheme": true,
+      "dragDropEnabled": false
+    }],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://bluviboard.ru",
+      "capabilities": ["desktop-close"]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "BluviBoard",
+    "homepage": "https://bluviboard.ru",
+    "category": "Productivity",
+    "shortDescription": "Доска для идей, рисунков и заметок",
+    "license": "MIT",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+    "windows": {
+      "allowDowngrades": false,
+      "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["Russian", "English"],
+        "displayLanguageSelector": true,
+        "startMenuFolder": "BluviBoard",
+        "compression": "lzma"
+      }
+    }
+  }
+}

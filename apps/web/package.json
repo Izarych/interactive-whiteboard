@@ -11,13 +11,14 @@
   },
   "dependencies": {
     "@hocuspocus/provider": "^3.4.3",
+    "@tauri-apps/api": "^2.12.0",
     "@whiteboard/shared": "*",
     "konva": "^10.0.2",
+    "lucide-react": "^0.468.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-konva": "^19.0.10",
     "recharts": "^3.6.0",
-    "lucide-react": "^0.468.0",
     "yjs": "^13.6.27"
   },
   "devDependencies": {

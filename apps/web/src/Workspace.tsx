@@ -3,7 +3,7 @@ import type { ActiveSession, Board, BoardSummary, SessionInfo } from '@whiteboar
 import { api, errorMessage } from './api';
 import type { EditorHandle } from './BoardEditor';
 import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
-import { PwaInstallButton } from './PwaControls';
+import { InstallControls } from './InstallControls';
 import { registerUpdateGuard } from './pwa';
 
 const BoardEditor = lazy(() => import('./BoardEditor').then((module) => ({ default: module.BoardEditor })));
@@ -180,7 +180,7 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
           </> : <button disabled={busy} onClick={() => { void logout(); }}>Выйти</button>}</div>
           {session.user?.role === 'admin' && <button className="admin-entry-button" disabled={busy} onClick={() => { void run(async () => { await editorRef.current?.flush(); onAdmin(); }); }}>Админ-панель →</button>}
         </div>
-        <PwaInstallButton />
+        <InstallControls />
         <div className="sidebar-footer">Всё сохраняется автоматически<br /><span>Ваши идеи остаются с вами</span></div>
       </aside>
       <div className={`workspace ${busy ? 'workspace--busy' : ''}`}>

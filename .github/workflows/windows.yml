@@ -1,0 +1,112 @@
+name: Windows installer
+
+on:
+  push:
+    branches: [main]
+    paths: ['apps/desktop/**', 'apps/web/**', 'package.json', 'package-lock.json', 'tests/desktop.spec.ts', 'docs/releases/desktop/**', '.github/workflows/windows.yml']
+  pull_request:
+    branches: [main]
+    paths: ['apps/desktop/**', 'apps/web/**', 'package.json', 'package-lock.json', 'tests/desktop.spec.ts', '.github/workflows/windows.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and verify Windows x64 installer
+    runs-on: windows-2025
+    timeout-minutes: 45
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '24.15.0', cache: npm }
+      - name: Set up Rust
+        run: rustup toolchain install 1.98.1 --profile minimal --component rustfmt
+      - name: Select toolchain
+        run: rustup default 1.98.1
+      - run: npm ci
+      - name: Read desktop version
+        id: version
+        shell: bash
+        run: echo "version=$(node -p "require('./apps/desktop/package.json').version")" >> "$GITHUB_OUTPUT"
+      - run: npm run assets --workspace @whiteboard/desktop
+      - run: npm run desktop:check
+      - run: npm run desktop:build
+      - run: npm run build:web
+      - name: Install WebView2 for the native smoke check
+        shell: pwsh
+        run: |
+          $setup = Join-Path $env:RUNNER_TEMP 'WebView2Setup.exe'
+          Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $setup
+          if ((Get-AuthenticodeSignature $setup).Status -ne 'Valid') { throw 'Invalid WebView2 installer signature' }
+          $process = Start-Process $setup -ArgumentList '/silent', '/install' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "WebView2 setup failed: $($process.ExitCode)" }
+      - name: Package installer and checksum
+        run: node apps/desktop/scripts/package.cjs
+      - name: Install, check and uninstall the Windows application
+        shell: pwsh
+        run: |
+          $installer = (Get-ChildItem 'apps/desktop/artifacts/*.exe').FullName
+          $directory = Join-Path $env:RUNNER_TEMP 'BluviBoard-installed'
+          $install = Start-Process $installer -ArgumentList "/S /D=$directory" -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Installation failed: $($install.ExitCode)" }
+          $env:BLUVIBOARD_DESKTOP_EXECUTABLE = Join-Path $directory 'bluviboard-desktop.exe'
+          if (-not (Test-Path $env:BLUVIBOARD_DESKTOP_EXECUTABLE)) { throw 'Installed executable is missing' }
+          try {
+            node apps/desktop/scripts/smoke.cjs
+            if ($LASTEXITCODE -ne 0) { throw 'Native Windows check failed' }
+          } finally {
+            $uninstall = Start-Process (Join-Path $directory 'uninstall.exe') -ArgumentList '/S' -Wait -PassThru
+            if ($uninstall.ExitCode -ne 0) { throw "Uninstall failed: $($uninstall.ExitCode)" }
+          }
+          if (Test-Path $env:BLUVIBOARD_DESKTOP_EXECUTABLE) { throw 'Uninstall did not remove the application' }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: BluviBoard-Windows-x64
+          path: apps/desktop/artifacts/*
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
+        with:
+          name: Windows-diagnostics
+          path: apps/desktop/artifacts/native-smoke.png
+          if-no-files-found: ignore
+
+  publish:
+    name: Publish a new desktop version
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { persist-credentials: false }
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: BluviBoard-Windows-x64
+          path: artifacts
+      - name: Publish installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          tag="desktop-v${VERSION}"
+          if gh release view "$tag" --json tagName >/dev/null 2>&1; then
+            echo "Desktop ${VERSION} is already published. Increase the desktop version to publish a new installer."
+            exit 0
+          fi
+          test -f "docs/releases/desktop/${VERSION}.md"
+          gh release create "$tag" --target "$GITHUB_SHA" --latest=false --title "BluviBoard для Windows ${VERSION}" --notes-file "docs/releases/desktop/${VERSION}.md" artifacts/*

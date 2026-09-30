@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { errorMessage } from './api';
+import { isDesktop } from './platform';
 
 interface InstallPrompt extends Event {
   prompt: () => Promise<void>;
@@ -16,7 +17,7 @@ interface PwaState {
 }
 const displayMode = window.matchMedia('(display-mode: standalone)');
 let state: PwaState = {
-  installed: displayMode.matches || !!(navigator as Navigator & { standalone?: boolean }).standalone,
+  installed: isDesktop || displayMode.matches || !!(navigator as Navigator & { standalone?: boolean }).standalone,
   installPrompt: null, installing: false, waiting: null, updating: false, deferred: false, error: '',
 };
 const listeners = new Set<() => void>();
@@ -35,6 +36,10 @@ export function registerUpdateGuard(guard: () => Promise<void>) {
   guards.add(guard);
   return () => { guards.delete(guard); };
 }
+export async function prepareToLeave() {
+  for (const guard of guards) await guard();
+}
+export const isPwaUpdating = () => state.updating;
 
 export function startPwa() {
   if (started) return;
@@ -44,7 +49,7 @@ export function startPwa() {
     publish({ installPrompt: event as InstallPrompt });
   });
   window.addEventListener('appinstalled', () => publish({ installed: true, installPrompt: null, installing: false }));
-  displayMode.addEventListener('change', () => publish({ installed: displayMode.matches }));
+  displayMode.addEventListener('change', () => publish({ installed: isDesktop || displayMode.matches }));
   if (!import.meta.env.PROD || !window.isSecureContext || !('serviceWorker' in navigator)) return;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (reloadRequested) {
@@ -93,7 +98,7 @@ export async function applyPwaUpdate() {
   if (!navigator.onLine) { publish({ error: 'Для обновления восстановите подключение к интернету.' }); return; }
   publish({ updating: true, error: '' });
   try {
-    for (const guard of guards) await guard();
+    await prepareToLeave();
     // Another window may already have activated the same worker while we saved.
     if (worker.state === 'activated') { window.location.reload(); return; }
     if (worker.state !== 'installed') throw new Error('Версия приложения изменилась. Повторите обновление.');

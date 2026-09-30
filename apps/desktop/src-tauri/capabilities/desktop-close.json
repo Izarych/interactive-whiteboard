@@ -1,0 +1,8 @@
+{
+  "identifier": "desktop-close",
+  "description": "Allow the BluviBoard window to close after saving the current board.",
+  "windows": ["main"],
+  "local": false,
+  "remote": { "urls": ["https://bluviboard.ru/*"] },
+  "permissions": ["allow-desktop-close"]
+}
