@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Ellipse, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from 'react-konva';
 import type Konva from 'konva';
-import type { DrawnElement, DrawingElement, ImageElement } from '@whiteboard/shared';
+import type { BoardBackground, DrawnElement, DrawingElement, ImageElement } from '@whiteboard/shared';
 import { loadImage } from './images';
+import { backgroundImages } from './background';
 
 export type Tool = 'pen' | 'eraser' | 'rectangle' | 'ellipse' | 'hand' | 'select';
 interface Props {
   elements: DrawingElement[];
+  background: BoardBackground;
   tool: Tool;
   color: string;
   width: number;
@@ -62,7 +64,7 @@ function CanvasImage({ element, draggable, onChange }: {
   </>;
 }
 
-export function Canvas({ elements, tool, color, width, onChange, stageRef, selectedImageId, onSelectImage, onImageFiles }: Props) {
+export function Canvas({ elements, background, tool, color, width, onChange, stageRef, selectedImageId, onSelectImage, onImageFiles }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 1, height: 1 });
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
@@ -112,7 +114,7 @@ export function Canvas({ elements, tool, color, width, onChange, stageRef, selec
   };
 
   return (
-    <div className={`canvas canvas--${tool}`} ref={container} data-testid="canvas"
+    <div className={`canvas canvas--${tool}`} ref={container} data-testid="canvas" data-background={background.pattern}
       onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }}
       onDrop={(event) => {
         const files = Array.from(event.dataTransfer.files);
@@ -121,7 +123,8 @@ export function Canvas({ elements, tool, color, width, onChange, stageRef, selec
         const rect = container.current!.getBoundingClientRect();
         onImageFiles(files, { x: (event.clientX - rect.left - view.x) / view.scale, y: (event.clientY - rect.top - view.y) / view.scale });
       }}
-      style={{ backgroundSize: `${24 * view.scale}px ${24 * view.scale}px`, backgroundPosition: `${view.x}px ${view.y}px` }}>
+      style={{ backgroundImage: backgroundImages[background.pattern], backgroundSize: `${background.size * view.scale}px ${background.size * view.scale}px`,
+        backgroundPosition: `${view.x}px ${view.y}px` }}>
       <Stage ref={stageRef} width={size.width} height={size.height} x={view.x} y={view.y} scaleX={view.scale} scaleY={view.scale}
         draggable={tool === 'hand'}
         onDragEnd={(event) => { if (event.target === stageRef.current) setView({ ...view, x: event.target.x(), y: event.target.y() }); }}

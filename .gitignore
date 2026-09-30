@@ -5,6 +5,8 @@ test-results/
 playwright-report/
 apps/server/data/
 .test-data/
+deploy/*.env
+deploy/*.key
 *.tsbuildinfo
 .env
 .env.*

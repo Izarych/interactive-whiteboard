@@ -1,0 +1,14 @@
+[Unit]
+Description=Deploy the latest verified BluviBoard release
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=bluviboard-deploy
+Group=bluviboard-deploy
+ExecStart=/opt/bluviboard/ops/deploy.sh
+NoNewPrivileges=false
+PrivateTmp=true
+ProtectHome=true
+TimeoutStartSec=600

@@ -6,11 +6,14 @@ const { randomUUID } = require('node:crypto');
 const path = require('node:path');
 const sharp = require('sharp');
 const { stat, rm } = require('node:fs/promises');
-const { cleanupAssets } = require('./asset-test-utils.cjs');
+const { cleanupAssets, cleanupWorkspaces } = require('./asset-test-utils.cjs');
+const { createApiClient } = require('./http-client.cjs');
 const imageDirectory = path.resolve(__dirname, `../.test-data/api-assets-${randomUUID()}`);
 
 const port = 3101;
 const base = `http://localhost:${port}/api`;
+const client = createApiClient(base);
+const fetch = client.fetch;
 let server;
 let output = '';
 
@@ -18,7 +21,7 @@ async function start() {
   output = '';
   server = spawn(process.execPath, ['dist/main.js'], {
     cwd: path.resolve(__dirname, '../apps/server'),
-    env: { ...process.env, PORT: String(port), STORAGE_PROVIDER: 'local', STORAGE_LOCAL_PATH: imageDirectory },
+    env: { ...process.env, PORT: String(port), STORAGE_PROVIDER: 'local', STORAGE_LOCAL_PATH: imageDirectory, LEGACY_OWNER_EMAIL: '' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   server.stdout.on('data', (data) => { output += data; });
@@ -55,13 +58,17 @@ async function request(method, route, body, status) {
 test('PostgreSQL boards: CRUD, validation, conflicts and persistence after restart', async (t) => {
   const created = [];
   const assets = [];
+  const workspaces = [];
   try {
     await start();
+    const guest = await request('POST', '/auth/guest', undefined, 200);
+    workspaces.push(guest.workspaceId);
     let board;
     let other;
     let asset;
     const document = {
       version: 1,
+      background: { pattern: 'grid', size: 32 },
       elements: [
         { id: randomUUID(), kind: 'stroke', color: '#ef4444', width: 4, points: [10, 20, 30, 40, 50, 80] },
         { id: randomUUID(), kind: 'rectangle', color: '#3b82f6', width: 8, points: [-10, 0, 100, 200] },
@@ -107,6 +114,25 @@ test('PostgreSQL boards: CRUD, validation, conflicts and persistence after resta
       assert.equal(unchanged.revision, 1);
     });
 
+    await t.test('validate background settings and preserve the legacy document format', async () => {
+      const legacy = await request('GET', `/boards/${other.id}`, undefined, 200);
+      assert.deepEqual(legacy.document, { version: 1, elements: [] });
+      for (const background of [null, 'grid', { pattern: 'unknown', size: 32 }, { pattern: 'grid', size: 11 }, { pattern: 'grid', size: 97 }, { pattern: 'grid', size: 32.5 }]) {
+        await request('PUT', `/boards/${board.id}`, { title: board.title, document: { ...document, background }, revision: board.revision }, 400);
+      }
+      const unchanged = await request('GET', `/boards/${board.id}`, undefined, 200);
+      assert.deepEqual(unchanged.document.background, { pattern: 'grid', size: 32 });
+      assert.equal(unchanged.revision, board.revision);
+    });
+
+    await t.test('save arbitrary grid sizes and both allowed boundaries', async () => {
+      for (const size of [12, 37, 96]) {
+        document.background.size = size;
+        board = await request('PUT', `/boards/${board.id}`, { title: board.title, document, revision: board.revision }, 200);
+        assert.deepEqual(board.document.background, { pattern: 'grid', size });
+      }
+    });
+
     await t.test('upload a screenshot, serve PNG bytes and save a referenced image object', async () => {
       const png = await sharp({ create: { width: 320, height: 180, channels: 3, background: '#22c55e' } }).png().toBuffer();
       const form = new FormData();
@@ -121,7 +147,7 @@ test('PostgreSQL boards: CRUD, validation, conflicts and persistence after resta
       assert.ok((await stat(path.join(imageDirectory, `${asset.id}.png`))).size > 0);
       const download = await fetch(`http://localhost:${port}${asset.url}`);
       assert.equal(download.headers.get('content-type'), 'image/png');
-      assert.ok(download.headers.get('cache-control').includes('immutable'));
+      assert.equal(download.headers.get('cache-control'), 'private, no-store');
       const metadata = await sharp(Buffer.from(await download.arrayBuffer())).metadata();
       assert.equal(metadata.width, 320);
       document.elements.push({ id: randomUUID(), kind: 'image', assetId: asset.id, x: 10, y: 30, width: 320, height: 180 });
@@ -148,7 +174,7 @@ test('PostgreSQL boards: CRUD, validation, conflicts and persistence after resta
       await request('PUT', `/boards/${board.id}`, { title: board.title, document: invalid, revision: board.revision }, 400);
       const missing = await fetch(`${base}/assets/${randomUUID()}`);
       assert.equal(missing.status, 404);
-      assert.equal(missing.headers.get('cache-control'), null);
+      assert.equal(missing.headers.get('cache-control'), 'no-store');
     });
 
     await t.test('drawing survives API restart in PostgreSQL', async () => {
@@ -173,6 +199,7 @@ test('PostgreSQL boards: CRUD, validation, conflicts and persistence after resta
     }
     await stop();
     await cleanupAssets(assets, imageDirectory);
+    await cleanupWorkspaces(workspaces, imageDirectory);
     await rm(imageDirectory, { recursive: true, force: true });
   }
 });

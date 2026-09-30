@@ -1,0 +1,87 @@
+name: Verify and publish production
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Build, test and security audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: whiteboard_ci
+        ports: [5432:5432]
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+      mailhog:
+        image: mailhog/mailhog:v1.0.1
+        ports: [1025:1025, 8025:8025]
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/whiteboard_ci
+      AUTH_SECRET: ci-only-code-hashing-secret-not-a-production-secret
+      SMTP_HOST: localhost
+      SMTP_PORT: '1025'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '24.15.0', cache: npm }
+      - run: npm ci
+      - run: touch apps/server/.env
+      - run: npm audit --audit-level=high
+      - run: npm run build
+      - run: npm run test:api
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - run: npm prune --omit=dev
+      - name: Assemble Linux production release
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p bundle/apps/server bundle/apps/web bundle/packages
+          cp package.json package-lock.json bundle/
+          cp -a node_modules bundle/
+          cp -a apps/server/dist apps/server/scripts apps/server/package.json bundle/apps/server/
+          if [ -d apps/server/node_modules ]; then cp -a apps/server/node_modules bundle/apps/server/; fi
+          cp -a apps/web/dist apps/web/package.json bundle/apps/web/
+          cp -a packages/shared bundle/packages/
+          cp -a deploy bundle/
+          printf '{"commit":"%s"}\n' "$GITHUB_SHA" > bundle/release.json
+          tar -C bundle -czf "bluviboard-${GITHUB_SHA}.tar.gz" .
+          sha256sum "bluviboard-${GITHUB_SHA}.tar.gz" > "bluviboard-${GITHUB_SHA}.tar.gz.sha256"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: github.event_name != 'pull_request'
+        with:
+          name: production
+          path: bluviboard-*.tar.gz*
+          retention-days: 7
+  publish:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with: { name: production }
+      - name: Publish verified deploy artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          gh release view "deploy-${COMMIT}" >/dev/null 2>&1 || gh release create "deploy-${COMMIT}" --target "$COMMIT" --prerelease --title "Deployment ${COMMIT:0:8}" --notes "Verified production artifact. No application secrets included."
+          gh release upload "deploy-${COMMIT}" bluviboard-*.tar.gz* --clobber

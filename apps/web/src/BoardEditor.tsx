@@ -1,11 +1,13 @@
 import { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type Konva from 'konva';
-import type { Board, DrawingElement, ImageElement } from '@whiteboard/shared';
+import type { Board, BoardBackground, DrawingElement, ImageElement } from '@whiteboard/shared';
 import { Canvas } from './Canvas';
 import type { Tool } from './Canvas';
 import { useBoard } from './useBoard';
 import { api, errorMessage } from './api';
 import { loadImage } from './images';
+import { backgroundPatterns, DEFAULT_BACKGROUND } from './background';
+import { BackgroundSizeControl } from './BackgroundSizeControl';
 
 export interface EditorHandle {
   flush: () => Promise<void>;
@@ -40,15 +42,21 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled }: {
   const [imageError, setImageError] = useState('');
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const background = board.document.background ?? DEFAULT_BACKGROUND;
   useImperativeHandle(editorRef, () => ({ flush: async () => {
     while (pendingUploads.current) await uploads.current;
     await flush();
   }, snapshot }));
 
   const changeElements = (elements: DrawingElement[]) => {
-    const current = snapshot().document.elements;
-    setHistory((previous) => ({ undo: [...previous.undo.slice(-49), current], redo: [] }));
-    edit({ document: { version: 1, elements } });
+    const document = snapshot().document;
+    setHistory((previous) => ({ undo: [...previous.undo.slice(-49), document.elements], redo: [] }));
+    edit({ document: { ...document, elements } });
+  };
+
+  const changeBackground = (patch: Partial<BoardBackground>) => {
+    const document = snapshot().document;
+    edit({ document: { ...document, background: { ...(document.background ?? DEFAULT_BACKGROUND), ...patch } } });
   };
 
   const insertImages = (files: File[], position?: { x: number; y: number }) => {
@@ -99,13 +107,13 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled }: {
     const last = history.undo.at(-1);
     if (!last) return;
     setHistory({ undo: history.undo.slice(0, -1), redo: [...history.redo, board.document.elements] });
-    edit({ document: { version: 1, elements: last } });
+    edit({ document: { ...snapshot().document, elements: last } });
   };
   const redo = () => {
     const last = history.redo.at(-1);
     if (!last) return;
     setHistory({ undo: [...history.undo, board.document.elements], redo: history.redo.slice(0, -1) });
-    edit({ document: { version: 1, elements: last } });
+    edit({ document: { ...snapshot().document, elements: last } });
   };
 
   useEffect(() => {
@@ -150,7 +158,7 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled }: {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       if (stage !== stageRef.current) return;
       transformers.forEach((node) => node.hide());
-      // Export the visible viewport on white, without the editor's dotted grid or selection.
+      // Export the visible viewport on white, without the guide background or selection.
       const canvas = document.createElement('canvas');
       canvas.width = stage.width() * 2;
       canvas.height = stage.height() * 2;
@@ -216,7 +224,17 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled }: {
         {tool === 'select' && board.document.elements.some((element) => element.id === selectedImageId && element.kind === 'image') &&
           <button className="text-button" onClick={deleteSelected}>Удалить изображение</button>}
       </div>
-      <Canvas elements={board.document.elements} tool={tool} color={color} width={width} stageRef={stageRef} onChange={changeElements}
+      <div className="background-bar" aria-label="Настройки фона">
+        <span className="background-label">Фон доски</span>
+        <div className="background-options" role="group" aria-label="Рисунок фона">
+          {backgroundPatterns.map((pattern) => <button key={pattern.id} className={`background-option ${background.pattern === pattern.id ? 'active' : ''}`}
+            aria-pressed={background.pattern === pattern.id} onClick={() => changeBackground({ pattern: pattern.id })}>
+            <span className={`background-swatch background-swatch--${pattern.id}`} aria-hidden="true" />{pattern.label}
+          </button>)}
+        </div>
+        {background.pattern !== 'plain' && <BackgroundSizeControl background={background} onChange={(size) => changeBackground({ size })} />}
+      </div>
+      <Canvas elements={board.document.elements} background={background} tool={tool} color={color} width={width} stageRef={stageRef} onChange={changeElements}
         selectedImageId={selectedImageId} onSelectImage={setSelectedImageId} onImageFiles={insertImages} />
       <footer className="editor-footer"><span>{board.document.elements.length} объектов</span>
         <span>{tool === 'select' ? 'Перетаскивайте изображение · Уголки — размер · Delete — удалить' :

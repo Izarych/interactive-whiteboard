@@ -14,7 +14,9 @@
     "build:web": "npm run build --workspace @whiteboard/web",
     "build:server": "npm run build --workspace @whiteboard/server",
     "db:setup": "npm run db:setup --workspace @whiteboard/server",
-    "test:api": "node --test tests/boards-api.test.cjs",
+    "mail:preview": "npm run mail:preview --workspace @whiteboard/server --",
+    "admin:create": "npm run build:server && npm run admin:create --workspace @whiteboard/server --",
+    "test:api": "node --test tests/boards-api.test.cjs tests/auth-api.test.cjs",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

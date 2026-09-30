@@ -2,9 +2,9 @@ import { Type, Transform } from 'class-transformer';
 import {
   ArrayMaxSize, ArrayMinSize, Equals, IsArray, IsHexColor, IsIn,
   IsDefined, IsInt, IsNumber, IsObject, IsString, IsUUID, Max, MaxLength, Min, MinLength,
-  ValidateNested, Validate, ValidatorConstraint, ValidatorConstraintInterface,
+  ValidateIf, ValidateNested, Validate, ValidatorConstraint, ValidatorConstraintInterface,
 } from 'class-validator';
-import type { DrawnElement, DrawingElement } from '@whiteboard/shared';
+import type { BoardBackground, DrawnElement, DrawingElement } from '@whiteboard/shared';
 
 @ValidatorConstraint({ name: 'drawingCoordinates', async: false })
 class DrawingCoordinates implements ValidatorConstraintInterface {
@@ -78,9 +78,26 @@ class ImageElementDto extends BaseElementDto {
   height: number;
 }
 
+class BoardBackgroundDto {
+  @IsIn(['plain', 'dots', 'grid'])
+  pattern: BoardBackground['pattern'];
+
+  @IsInt()
+  @Min(12)
+  @Max(96)
+  size: BoardBackground['size'];
+}
+
 class BoardDocumentDto {
   @Equals(1)
   version: 1;
+
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsDefined()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => BoardBackgroundDto)
+  background?: BoardBackgroundDto;
 
   @IsArray()
   @ArrayMaxSize(10000)

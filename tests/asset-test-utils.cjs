@@ -11,7 +11,8 @@ async function cleanupAssets(ids, directory) {
     const result = await pool.query(`
       DELETE FROM image_assets a WHERE a.id = ANY($1::uuid[]) AND NOT EXISTS (
         SELECT 1 FROM boards b, jsonb_array_elements(b.document->'elements') e WHERE e->>'assetId' = a.id::text
-      ) RETURNING storage_provider, storage_key`, [ids]);
+      ) AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_asset_id = a.id)
+      RETURNING storage_provider, storage_key`, [ids]);
     for (const row of result.rows) {
       if (row.storage_provider === 'local') await rm(path.resolve(directory, row.storage_key), { force: true });
     }
@@ -20,4 +21,18 @@ async function cleanupAssets(ids, directory) {
   }
 }
 
-module.exports = { cleanupAssets };
+async function cleanupWorkspaces(ids, directory) {
+  if (!ids.length) return;
+  if (!process.env.DATABASE_URL) process.loadEnvFile(path.resolve(__dirname, '../apps/server/.env'));
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    const files = await pool.query('SELECT storage_provider, storage_key FROM image_assets WHERE owner_id = ANY($1::uuid[])', [ids]);
+    await pool.query('DELETE FROM users WHERE id IN (SELECT user_id FROM workspace_owners WHERE id = ANY($1::uuid[]))', [ids]);
+    await pool.query('DELETE FROM workspace_owners WHERE id = ANY($1::uuid[])', [ids]);
+    for (const row of files.rows) {
+      if (row.storage_provider === 'local') await rm(path.resolve(directory, row.storage_key), { force: true });
+    }
+  } finally { await pool.end(); }
+}
+
+module.exports = { cleanupAssets, cleanupWorkspaces };

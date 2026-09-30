@@ -2,7 +2,22 @@ import { test, expect } from '@playwright/test';
 import type { Page, APIRequestContext } from '@playwright/test';
 import sharp from 'sharp';
 import path from 'node:path';
-import { cleanupAssets } from './asset-test-utils.cjs';
+import { cleanupAssets, cleanupWorkspaces } from './asset-test-utils.cjs';
+const imageDirectory = process.env.BB_E2E_IMAGE_DIRECTORY ?? path.resolve('.test-data/e2e-assets');
+
+let guestCookie = '';
+let guestWorkspace = '';
+test.beforeEach(async ({ context, request }) => {
+  const response = await request.post('/api/auth/guest');
+  expect(response.ok()).toBeTruthy();
+  guestWorkspace = (await response.json()).workspaceId;
+  const state = await request.storageState();
+  guestCookie = state.cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; ');
+  await context.addCookies(state.cookies);
+});
+test.afterEach(async () => {
+  await cleanupWorkspaces([guestWorkspace], imageDirectory);
+});
 
 async function draw(page: Page, from: [number, number], to: [number, number]) {
   const box = await page.getByTestId('canvas').boundingBox();
@@ -32,7 +47,7 @@ async function cleanup(ids: string[]) {
   // Native requests still work if Playwright has disposed a timed-out test's context.
   for (const id of ids) {
     await fetch(`http://localhost:5174/api/boards/${id}`, {
-      method: 'DELETE', signal: AbortSignal.timeout(5000),
+      method: 'DELETE', headers: { Cookie: guestCookie }, signal: AbortSignal.timeout(5000),
     }).catch(() => {});
   }
 }
@@ -119,6 +134,129 @@ test('drawing tools, autosave, undo/redo, independent boards, reload and deletio
     await expectRendered(page);
     await page.screenshot({ path: 'test-results/whiteboard.png', fullPage: true });
     expect(errors).toEqual([]);
+  } finally {
+    await cleanup(ids);
+  }
+});
+
+test('square grid follows the camera, survives editing and reload, and stays independent per board', async ({ page, request }) => {
+  const ids: string[] = [];
+  page.on('dialog', (dialog) => dialog.accept());
+  try {
+    await page.goto('/');
+    await expect(page).toHaveTitle('BluviBoard — доска для ваших идей');
+    await expect(page.locator('.brand-name')).toHaveText('BluviBoard');
+    const icon = await request.get('/favicon.svg');
+    expect(icon.status()).toBe(200);
+    expect(icon.headers()['content-type']).toContain('image/svg+xml');
+    expect(await icon.text()).toContain('<svg');
+    const firstTitle = `E2E grid ${Date.now()}`;
+    const id = await create(page, ids, firstTitle);
+    const canvas = page.getByTestId('canvas');
+    await expect(canvas).toHaveAttribute('data-background', 'dots');
+    await page.getByRole('button', { name: 'Клетка', exact: true }).click();
+    await page.getByRole('slider', { name: 'Размер клетки', exact: true }).fill('32');
+    await expect(canvas).toHaveCSS('background-image', /linear-gradient/);
+    await expect(canvas).toHaveCSS('background-size', '32px 32px, 32px 32px');
+
+    // Write a handwritten 2 inside a 32-unit cell, using one persisted stroke.
+    const box = (await canvas.boundingBox())!;
+    const points = [[100, 136], [103, 133], [116, 133], [120, 138], [118, 143], [104, 153], [101, 156], [120, 156]];
+    await page.mouse.move(box.x + points[0][0], box.y + points[0][1]);
+    await page.mouse.down();
+    for (const [x, y] of points.slice(1)) await page.mouse.move(box.x + x, box.y + y, { steps: 2 });
+    await page.mouse.up();
+    await expect(page.getByText('1 объектов', { exact: true })).toBeVisible();
+    await expect(page.getByText('Сохранено', { exact: true })).toBeVisible();
+    const original = await read(request, id);
+    expect(original.document.background).toEqual({ pattern: 'grid', size: 32 });
+    await page.getByRole('button', { name: 'Увеличить масштаб', exact: true }).click();
+    await expect(canvas).toHaveCSS('background-size', '38.4px 38.4px, 38.4px 38.4px');
+    await page.getByRole('button', { name: '120%', exact: true }).click();
+    await page.getByRole('button', { name: 'Рука', exact: true }).click();
+    await draw(page, [700, 400], [770, 450]);
+    await expect(canvas).toHaveCSS('background-position', '70px 50px, 70px 50px');
+    await page.getByRole('button', { name: '100%', exact: true }).click();
+    await page.getByRole('button', { name: 'Отменить', exact: true }).click();
+    await expect(page.getByText('0 объектов', { exact: true })).toBeVisible();
+    await expect(canvas).toHaveAttribute('data-background', 'grid');
+    await page.getByRole('button', { name: 'Повторить', exact: true }).click();
+    await page.getByRole('button', { name: 'Очистить', exact: true }).click();
+    await expect(page.getByText('0 объектов', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Отменить', exact: true }).click();
+    await expect(page.getByText('1 объектов', { exact: true })).toBeVisible();
+
+    const secondTitle = `E2E plain ${Date.now()}`;
+    const secondId = await create(page, ids, secondTitle);
+    await expect(canvas).toHaveAttribute('data-background', 'dots');
+    await page.getByRole('button', { name: 'Чистый', exact: true }).click();
+    await expect(canvas).toHaveCSS('background-image', 'none');
+    await page.getByRole('navigation', { name: 'Доски' }).locator('.board-open').filter({ hasText: firstTitle }).click();
+    await expect(canvas).toHaveAttribute('data-background', 'grid');
+    await expect(page.getByRole('slider', { name: 'Размер клетки', exact: true })).toHaveValue('32');
+    const renamed = `${firstTitle} renamed`;
+    await page.getByRole('textbox', { name: 'Название доски' }).fill(renamed);
+    await expect(page.getByText('Сохранено', { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole('textbox', { name: 'Название доски' })).toHaveValue(renamed);
+    await expect(canvas).toHaveAttribute('data-background', 'grid');
+    await expect(canvas).toHaveCSS('background-size', '32px 32px, 32px 32px');
+    const persisted = await read(request, id);
+    expect(persisted.document.background).toEqual({ pattern: 'grid', size: 32 });
+    expect(persisted.document.elements).toEqual(original.document.elements);
+    expect((await read(request, secondId)).document.background).toEqual({ pattern: 'plain', size: 24 });
+    await expectRendered(page);
+    await page.screenshot({ path: 'test-results/grid-board.png', fullPage: true });
+  } finally {
+    await cleanup(ids);
+  }
+});
+
+test('background size supports precise input and a slider for cells and dots, including reload and input correction', async ({ page, request }) => {
+  const ids: string[] = [];
+  try {
+    await page.goto('/');
+    const id = await create(page, ids, `E2E background size ${Date.now()}`);
+    const canvas = page.getByTestId('canvas');
+    await page.getByRole('button', { name: 'Клетка', exact: true }).click();
+    const cellValue = page.getByRole('spinbutton', { name: 'Размер клетки: значение', exact: true });
+    await cellValue.fill('37');
+    await cellValue.press('Enter');
+    await expect(canvas).toHaveCSS('background-size', '37px 37px, 37px 37px');
+    await expect(page.getByRole('slider', { name: 'Размер клетки', exact: true })).toHaveValue('37');
+    await cellValue.fill('8');
+    await expect(canvas).toHaveCSS('background-size', '37px 37px, 37px 37px');
+    await cellValue.press('Tab');
+    await expect(cellValue).toHaveValue('12');
+    await expect(canvas).toHaveCSS('background-size', '12px 12px, 12px 12px');
+    await cellValue.fill('120');
+    await cellValue.press('Enter');
+    await expect(cellValue).toHaveValue('96');
+    await expect(canvas).toHaveCSS('background-size', '96px 96px, 96px 96px');
+
+    await page.getByRole('button', { name: 'Точки', exact: true }).click();
+    await page.getByRole('slider', { name: 'Шаг точек', exact: true }).fill('53');
+    const dotValue = page.getByRole('spinbutton', { name: 'Шаг точек: значение', exact: true });
+    await expect(dotValue).toHaveValue('53');
+    await expect(canvas).toHaveCSS('background-size', '53px 53px');
+    await dotValue.fill('');
+    await dotValue.press('Enter');
+    await expect(dotValue).toHaveValue('53');
+    await expect(page.getByText('Сохранено', { exact: true })).toBeVisible();
+    expect((await read(request, id)).document.background).toEqual({ pattern: 'dots', size: 53 });
+    await page.reload();
+    await expect(canvas).toHaveAttribute('data-background', 'dots');
+    await expect(canvas).toHaveCSS('background-size', '53px 53px');
+    await expect(dotValue).toHaveValue('53');
+    await page.getByRole('button', { name: 'Чистый', exact: true }).click();
+    await expect(page.getByRole('slider', { name: /^(Размер клетки|Шаг точек)$/ })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Точки', exact: true }).click();
+    await expect(dotValue).toHaveValue('53');
+    await expect(page.getByText('Сохранено', { exact: true })).toBeVisible();
+    await page.setViewportSize({ width: 360, height: 800 });
+    await expect(dotValue).toBeVisible();
+    const box = (await dotValue.boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(360);
   } finally {
     await cleanup(ids);
   }
@@ -220,7 +358,7 @@ test('paste a screenshot, move and resize it, export, undo deletion and reload s
     expect(errors).toEqual([]);
   } finally {
     await cleanup(ids);
-    await cleanupAssets(assets, path.resolve('.test-data/e2e-assets'));
+    await cleanupAssets(assets, imageDirectory);
   }
 });
 
@@ -247,7 +385,7 @@ test('a pending image upload is saved on its original board when switching, pres
     expect((await read(request, other)).document.elements).toHaveLength(0);
   } finally {
     await cleanup(ids);
-    await cleanupAssets(assets, path.resolve('.test-data/e2e-assets'));
+    await cleanupAssets(assets, imageDirectory);
   }
 });
 

@@ -1,5 +1,7 @@
 const cache = new Map<string, Promise<HTMLImageElement>>();
 
+export function clearImageCache() { cache.clear(); }
+
 export function loadImage(assetId: string): Promise<HTMLImageElement> {
   const existing = cache.get(assetId);
   if (existing) return existing;

@@ -1,0 +1,7 @@
+[Unit]
+Description=Consistent BluviBoard database and image backup
+
+[Service]
+Type=oneshot
+ExecStart=/opt/bluviboard/ops/backup.sh
+PrivateTmp=true
