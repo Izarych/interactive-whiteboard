@@ -25,9 +25,10 @@ fn main() {
         .setup(|app| {
             let mut window = WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
                 .initialization_script(
-                    "if (window === window.top && location.origin === 'https://bluviboard.ru') {\
-                      Object.defineProperty(window, '__BLUVIBOARD_DESKTOP__', { value: true });\
-                    }",
+                    format!("if (window === window.top && location.origin === 'https://bluviboard.ru') {{\
+                      Object.defineProperty(window, '__BLUVIBOARD_DESKTOP__', {{ value: true }});\
+                      Object.defineProperty(window, '__BLUVIBOARD_DESKTOP_VERSION__', {{ value: '{}' }});\
+                    }}", env!("CARGO_PKG_VERSION")),
                 )
                 .on_navigation(|url| {
                     if navigation::is_board(url) || navigation::is_launcher(url) {

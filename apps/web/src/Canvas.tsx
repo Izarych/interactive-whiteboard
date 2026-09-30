@@ -1,9 +1,13 @@
 import { useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { Ellipse, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from 'react-konva';
+import { Circle, Ellipse, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from 'react-konva';
 import type Konva from 'konva';
 import type { BoardBackground, DrawnElement, DrawingElement, ImageElement } from '@whiteboard/shared';
 import { loadImage } from './images';
 import { backgroundImages } from './background';
+import { eraseOutline, improveShape, touchesOutline } from './drawing-geometry';
+import type { Point } from './drawing-geometry';
+import { modifierHeld } from './drawing-settings';
+import type { ShapeModifier } from './drawing-settings';
 
 export type Tool = 'pen' | 'eraser' | 'rectangle' | 'ellipse' | 'hand' | 'select';
 export interface CanvasHandle { finish: () => void }
@@ -14,6 +18,8 @@ interface Props {
   tool: Tool;
   color: string;
   width: number;
+  eraserWidth?: number;
+  shapeModifier?: ShapeModifier;
   onChange: (elements: DrawingElement[]) => void;
   stageRef: React.RefObject<Konva.Stage | null>;
   selectedImageId: string | null;
@@ -66,12 +72,14 @@ function CanvasImage({ element, draggable, onChange }: {
   </>;
 }
 
-export function Canvas({ elements, background, tool, color, width, onChange, stageRef, selectedImageId, onSelectImage, onImageFiles, canvasRef }: Props) {
+export function Canvas({ elements, background, tool, color, width, eraserWidth = 24, shapeModifier = 'Shift', onChange, stageRef, selectedImageId, onSelectImage, onImageFiles, canvasRef }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 1, height: 1 });
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
   const [draft, setDraft] = useState<DrawnElement | null>(null);
-  const gesture = useRef<{ pointerId: number; element: DrawnElement | null; erased: Set<string>; pan: boolean } | null>(null);
+  const [erasedPreview, setErasedPreview] = useState<DrawingElement[] | null>(null);
+  const [eraserPosition, setEraserPosition] = useState<Point | null>(null);
+  const gesture = useRef<{ pointerId: number; element: DrawnElement | null; erasing: DrawingElement[] | null; baseIds: Set<string>; pan: boolean; snap: boolean; last: Point; radius: number } | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const elementsRef = useRef(elements);
   elementsRef.current = elements;
@@ -90,7 +98,7 @@ export function Canvas({ elements, background, tool, color, width, onChange, sta
     return () => observer.disconnect();
   }, []);
 
-  const point = () => {
+  const point = (): Point | null => {
     const position = stageRef.current?.getPointerPosition();
     return position ? [(position.x - view.x) / view.scale, (position.y - view.y) / view.scale] : null;
   };
@@ -99,13 +107,53 @@ export function Canvas({ elements, background, tool, color, width, onChange, sta
     const active = gesture.current;
     if (!active) return;
     gesture.current = null;
-    if (!cancelled && active.element) onChange([...elementsRef.current, active.element]);
-    if (!cancelled && active.erased.size) onChange(elementsRef.current.filter((element) => !active.erased.has(element.id)));
+    if (!cancelled && active.element) onChange([...elementsRef.current, active.snap ? improveShape(active.element) : active.element]);
+    if (!cancelled && active.erasing && (active.erasing.length !== active.baseIds.size || active.erasing.some((element, i) => element !== elementsRef.current[i]))) {
+      onChange([...active.erasing, ...elementsRef.current.filter((element) => !active.baseIds.has(element.id))]);
+    }
     setDraft(null);
+    setErasedPreview(null);
     // An interrupted pan must not leave Konva dragging on the next tool.
     stageRef.current?.stopDrag();
   };
   useImperativeHandle(canvasRef, () => ({ finish: () => finish() }));
+
+  useEffect(() => {
+    const modifier = (event: KeyboardEvent) => {
+      const active = gesture.current;
+      if (!active) return;
+      if ((event.ctrlKey || event.metaKey) && ['z', 'y'].includes(event.key.toLowerCase())) {
+        finish(true); event.preventDefault(); event.stopImmediatePropagation(); return;
+      }
+      if (!active.element) return;
+      active.snap = modifierHeld(event, shapeModifier);
+      setDraft(active.snap ? improveShape(active.element) : active.element);
+      if (event.key === shapeModifier) event.preventDefault();
+    };
+    const blur = () => finish();
+    window.addEventListener('keydown', modifier, true);
+    window.addEventListener('keyup', modifier, true);
+    window.addEventListener('blur', blur);
+    return () => { window.removeEventListener('keydown', modifier, true); window.removeEventListener('keyup', modifier, true); window.removeEventListener('blur', blur); };
+  });
+
+  const erase = (active: NonNullable<typeof gesture.current>, p: Point, whole: boolean) => {
+    if (!active.erasing) return;
+    if (whole) {
+      const groups = new Set<string>();
+      for (const element of active.erasing) {
+        const hit = element.kind === 'image'
+          ? (p[0] >= element.x && p[0] <= element.x + element.width && p[1] >= element.y && p[1] <= element.y + element.height) || touchesOutline({ id: element.id, kind: 'rectangle', color: '', width: 0, points: [element.x, element.y, element.x + element.width, element.y + element.height] }, active.last, p, active.radius)
+          : touchesOutline(element, active.last, p, active.radius);
+        if (hit) groups.add(element.kind === 'image' ? element.id : element.groupId ?? element.id);
+      }
+      active.erasing = active.erasing.filter((element) => !groups.has(element.kind === 'image' ? element.id : element.groupId ?? element.id));
+    } else {
+      active.erasing = active.erasing.flatMap<DrawingElement>((element) => element.kind === 'image' ? [element] : eraseOutline(element, active.last, p, active.radius));
+    }
+    active.last = p;
+    setErasedPreview(active.erasing);
+  };
 
   const zoom = (scale: number, anchor = { x: size.width / 2, y: size.height / 2 }) => {
     const next = Math.max(0.2, Math.min(4, scale));
@@ -118,6 +166,7 @@ export function Canvas({ elements, background, tool, color, width, onChange, sta
 
   return (
     <div className={`canvas canvas--${tool}`} ref={container} data-testid="canvas" data-background={background.pattern}
+      onPointerLeave={() => { if (!gesture.current) setEraserPosition(null); }}
       onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }}
       onDrop={(event) => {
         const files = Array.from(event.dataTransfer.files);
@@ -146,24 +195,23 @@ export function Canvas({ elements, background, tool, color, width, onChange, sta
             id: crypto.randomUUID(), kind: tool === 'pen' ? 'stroke' : tool === 'rectangle' ? 'rectangle' : 'ellipse',
             color, width, points: [...p, ...p],
           } : null;
-          gesture.current = { pointerId: event.evt.pointerId, element, erased: new Set(), pan };
+          gesture.current = { pointerId: event.evt.pointerId, element, erasing: tool === 'eraser' && !pan ? [...elementsRef.current] : null,
+            baseIds: new Set(elementsRef.current.map((element) => element.id)), pan, snap: modifierHeld(event.evt, shapeModifier), last: p, radius: eraserWidth / 2 / view.scale };
           // Capture outside the stage so releasing beyond its border still commits the stroke.
           (event.evt.target as HTMLElement).setPointerCapture(event.evt.pointerId);
           if (pan) stageRef.current?.startDrag();
-          if (tool === 'eraser' && !pan && event.target.id()) gesture.current.erased.add(event.target.id());
-          setDraft(element);
+          if (gesture.current.erasing) { setEraserPosition(p); erase(gesture.current, p, event.evt.shiftKey); }
+          setDraft(element && gesture.current.snap ? improveShape(element) : element);
         }}
         onPointerMove={(event) => {
+          const p = point();
+          if (tool === 'eraser') setEraserPosition(p);
           const active = gesture.current;
           if (!active || active.pointerId !== event.evt.pointerId || active.pan) return;
-          if (tool === 'eraser') {
-            const stage = stageRef.current;
-            const pos = stage?.getPointerPosition();
-            const hit = pos && stage?.getIntersection(pos);
-            if (hit?.id()) active.erased.add(hit.id());
+          if (active.erasing) {
+            if (p) erase(active, p, event.evt.shiftKey);
             return;
           }
-          const p = point();
           if (!p || !active.element) return;
           const previous = active.element.points;
           if (active.element.kind === 'stroke') {
@@ -172,20 +220,30 @@ export function Canvas({ elements, background, tool, color, width, onChange, sta
             if (dx * dx + dy * dy < 1 / view.scale ** 2 || previous.length >= 40000) return;
           }
           active.element = { ...active.element, points: active.element.kind === 'stroke' ? [...previous, ...p] : [...previous.slice(0, 2), ...p] };
-          setDraft(active.element);
+          active.snap = modifierHeld(event.evt, shapeModifier);
+          setDraft(active.snap ? improveShape(active.element) : active.element);
         }}
-        onPointerUp={() => finish()}
-        onPointerCancel={() => finish(true)}
+        onPointerUp={(event) => {
+          const active = gesture.current;
+          if (active?.pointerId !== event.evt.pointerId) return;
+          active.snap = modifierHeld(event.evt, shapeModifier);
+          const p = point();
+          if (p && active.erasing) erase(active, p, event.evt.shiftKey);
+          finish();
+        }}
+        onPointerCancel={(event) => { if (gesture.current?.pointerId === event.evt.pointerId) finish(true); }}
         onWheel={(event) => {
           event.evt.preventDefault();
           if (!gesture.current) zoom(view.scale * (event.evt.deltaY > 0 ? 0.9 : 1.1), stageRef.current?.getPointerPosition() ?? undefined);
         }}>
         <Layer>
-          {elements.map((element) => element.kind === 'image'
+          {(erasedPreview ?? elements).map((element) => element.kind === 'image'
             ? <CanvasImage key={element.id} element={element} draggable={tool === 'select'}
               onChange={(changed) => onChange(elementsRef.current.map((item) => item.id === changed.id ? changed : item))} />
             : <Element key={element.id} element={element} />)}
           {draft && <Element element={draft} preview />}
+          {tool === 'eraser' && eraserPosition && <Circle name="editor-overlay" x={eraserPosition[0]} y={eraserPosition[1]} radius={eraserWidth / 2 / view.scale}
+            stroke="#6366f1" strokeWidth={1 / view.scale} fill="#6366f110" listening={false} />}
           {tool === 'select' && <Transformer ref={transformerRef} rotateEnabled={false} flipEnabled={false}
             enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']} keepRatio
             borderStroke="#6366f1" anchorStroke="#6366f1" anchorFill="#fff" anchorSize={9}

@@ -20,6 +20,8 @@
     "mail:preview": "npm run mail:preview --workspace @whiteboard/server --",
     "admin:create": "npm run build:server && npm run admin:create --workspace @whiteboard/server --",
     "test:api": "node --test tests/boards-api.test.cjs tests/auth-api.test.cjs",
+    "test:drawing": "node --test tests/drawing-geometry.test.cjs",
+    "test:updates": "node --test tests/desktop-release.test.cjs",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

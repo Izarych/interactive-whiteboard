@@ -29,6 +29,10 @@ class BaseElementDto {
 }
 
 class DrawnElementDto extends BaseElementDto {
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsUUID('4')
+  groupId?: string;
+
   @IsIn(['stroke', 'rectangle', 'ellipse'])
   declare kind: DrawnElement['kind'];
 

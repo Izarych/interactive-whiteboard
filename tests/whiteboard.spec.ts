@@ -197,7 +197,9 @@ test('drawing tools, autosave, undo/redo, independent boards, reload and deletio
     await page.keyboard.press('Control+Shift+Z');
     await expect(page.getByText('3 объектов', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Ластик', exact: true }).click();
+    await page.keyboard.down('Shift');
     await draw(page, [200, 178], [260, 200]);
+    await page.keyboard.up('Shift');
     await expect(page.getByText('2 объектов', { exact: true })).toBeVisible();
     await page.keyboard.press('Control+z');
     await expect(page.getByText('3 объектов', { exact: true })).toBeVisible();

@@ -60,6 +60,15 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .sidebar .windows-download-note { text-align: center; font-size: 9px; }
 .desktop-close { flex-direction: column; align-items: stretch; }
 .desktop-close .pwa-update-actions { flex-wrap: wrap; }
+.application-notices { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); width: min(550px, calc(100% - 28px)); display: flex; flex-direction: column; gap: 10px; z-index: 150; pointer-events: none; }
+.application-notices .pwa-update { position: static; transform: none; width: 100%; pointer-events: auto; }
+.desktop-update { flex-direction: column; align-items: stretch; }
+.desktop-update .pwa-update-actions { flex-wrap: wrap; }
+.desktop-update-control { margin: 14px 0; }
+.desktop-update-control small { display: block; margin: 7px 0 0; font-size: 10px; color: #9298a6; }
+.sidebar .desktop-update-control { flex-shrink: 0; margin: 0 4px 14px; }
+.sidebar .desktop-update-control button { width: 100%; justify-content: center; font-size: 11px; padding: 9px 7px; }
+.sidebar .desktop-update-control small { text-align: center; }
 .pwa-update { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); width: min(550px, calc(100% - 28px)); z-index: 150; display: flex; align-items: center; gap: 16px; padding: 16px 18px; border: 1px solid #dce3f3; border-radius: 14px; background: #fff; box-shadow: 0 8px 35px #20293822; }
 .pwa-update > div:first-child { flex: 1; min-width: 0; }
 .pwa-update strong { font-size: 12px; }
@@ -184,6 +193,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .width-control { display: flex; align-items: center; gap: 8px; margin-top: 20px; color: #747b8d; font-size: 11px; }
 .width-control input { flex: 1; min-width: 0; accent-color: #6366f1; }
 .width-control span { width: 16px; }
+.shape-modifier-control { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 20px; color: #747b8d; font-size: 11px; }
+.shape-modifier-control select { padding: 6px 8px; border: 1px solid #dfe3ed; border-radius: 7px; background: #fff; color: #202938; font-size: 12px; }
+.drawing-settings-note { margin: 12px 0 0; color: #9298a6; font-size: 10px; line-height: 1.7; }
 .canvas { position: relative; flex: 1; min-height: 0; overflow: hidden; background-color: #fcfdff; touch-action: none; }
 .background-options { display: flex; gap: 4px; }
 .background-option { display: flex; align-items: center; gap: 6px; padding: 7px; border-radius: 7px; color: #747b8d; font-size: 11px; }

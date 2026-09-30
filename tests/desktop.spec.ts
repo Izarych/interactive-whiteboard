@@ -6,16 +6,20 @@ import sharp from 'sharp';
 import { cleanupWorkspaces } from './asset-test-utils.cjs';
 import { version } from '../apps/desktop/package.json';
 
-async function native(context: BrowserContext) {
-  await context.addInitScript(() => {
+async function native(context: BrowserContext, installed = version) {
+  await context.route('**/api/desktop/latest', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ release: { version,
+    downloadUrl: `https://github.com/Izarych/interactive-whiteboard/releases/download/desktop-v${version}/BluviBoard-Setup-${version}-x64.exe`,
+    releaseUrl: `https://github.com/Izarych/interactive-whiteboard/releases/tag/desktop-v${version}` } }) }));
+  await context.addInitScript((installed) => {
     const target = window as Window & { nativeCloses: number; __TAURI_INTERNALS__: { invoke: (command: string) => Promise<void> } };
     Object.defineProperty(window, '__BLUVIBOARD_DESKTOP__', { value: true });
+    if (installed !== 'legacy') Object.defineProperty(window, '__BLUVIBOARD_DESKTOP_VERSION__', { value: installed });
     target.nativeCloses = 0;
     target.__TAURI_INTERNALS__ = { invoke: async (command) => {
       if (command !== 'desktop_close') throw new Error(`Unexpected native command: ${command}`);
       target.nativeCloses += 1;
     } };
-  });
+  }, installed);
 }
 
 const close = (page: Page) => page.evaluate(() => { void window.__BLUVIBOARD_PREPARE_CLOSE__!(); });
@@ -107,7 +111,7 @@ test('failed desktop save leaves a recoverable draft and supports retry or expli
     await expect(notice).toHaveCount(0);
     await stroke(page);
     await close(page);
-    await expect(notice).toBeVisible();
+    await expect(notice.getByRole('alert')).toContainText('Проверка ошибки сохранения');
     await page.unroute(`**/api/boards/${board.id}`);
     await notice.getByRole('button', { name: 'Повторить', exact: true }).click();
     await expect.poll(() => closes(page)).toBe(1);
@@ -160,4 +164,61 @@ test('embedded desktop launcher remains usable on a first offline start and retr
   await page.getByRole('button', { name: 'Попробовать снова' }).click();
   await expect(page.getByRole('heading', { name: 'Connected' })).toBeVisible();
   expect(credentialFree).toBe(true);
+});
+
+test('desktop checks updates on startup and manually, distinguishes versions numerically and reports check failures', async ({ page, context }) => {
+  await native(context, '0.2.0');
+  let checks = 0;
+  let failed = false;
+  await context.route('**/api/desktop/latest', (route) => {
+    checks += 1;
+    return failed ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'Сервис обновлений временно недоступен' }) })
+      : route.fulfill({ contentType: 'application/json', body: JSON.stringify({ release: { version: '0.10.0', downloadUrl: 'https://github.com/Izarych/interactive-whiteboard/releases/download/desktop-v0.10.0/BluviBoard-Setup-0.10.0-x64.exe', releaseUrl: 'https://github.com/Izarych/interactive-whiteboard/releases/tag/desktop-v0.10.0' } }) });
+  });
+  await page.goto('/');
+  const notice = page.getByRole('region', { name: 'Обновления Windows-клиента' });
+  await expect(notice).toContainText('Доступен Windows-клиент 0.10.0');
+  await expect(notice).toContainText('Установлена версия 0.2.0');
+  expect(checks).toBe(1);
+  await notice.getByRole('button', { name: 'Позже', exact: true }).click();
+  await expect(notice).toHaveCount(0);
+  await page.getByRole('button', { name: 'Проверить обновления', exact: true }).click();
+  await expect(notice).toBeVisible();
+  expect(checks).toBe(2);
+  failed = true;
+  await notice.getByRole('button', { name: 'Позже', exact: true }).click();
+  await page.getByRole('button', { name: 'Проверить обновления', exact: true }).click();
+  await expect(notice.getByRole('alert')).toContainText('Сервис обновлений временно недоступен');
+  await expect(notice).not.toContainText('Установлена актуальная версия');
+  expect(checks).toBe(3);
+});
+
+test('desktop update download finishes and saves a stroke; a failed save prevents opening the installer', async ({ page, context }) => {
+  let workspace: string | undefined;
+  try {
+    await native(context, 'legacy');
+    await context.addInitScript(() => {
+      const target = window as Window & { installerUrls: string[] };
+      target.installerUrls = [];
+      window.open = (url) => { target.installerUrls.push(String(url)); return null; };
+    });
+    const board = await createBoard(page, context);
+    workspace = board.workspaceId;
+    const notice = page.getByRole('region', { name: 'Обновления Windows-клиента' });
+    await expect(notice).toContainText(`Доступен Windows-клиент ${version}`);
+    await page.route(`**/api/boards/${board.id}`, (route) => route.request().method() === 'PUT'
+      ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'Ошибка сохранения перед обновлением' }) }) : route.continue());
+    await stroke(page, false);
+    await notice.getByRole('button', { name: 'Скачать обновление' }).evaluate((button: HTMLButtonElement) => button.click());
+    await expect(notice.getByRole('alert')).toContainText('Сначала сохраните доску');
+    expect(await page.evaluate(() => (window as Window & { installerUrls: string[] }).installerUrls)).toEqual([]);
+    await page.mouse.up();
+    await page.unroute(`**/api/boards/${board.id}`);
+    await notice.getByRole('button', { name: 'Скачать обновление' }).click();
+    await expect.poll(() => page.evaluate(() => (window as Window & { installerUrls: string[] }).installerUrls.length)).toBe(1);
+    expect((await (await context.request.get(`/api/boards/${board.id}`)).json()).document.elements).toHaveLength(1);
+    await expect(page.locator('.pwa-app')).not.toHaveAttribute('inert', '');
+  } finally {
+    if (workspace) await cleanupWorkspaces([workspace], process.env.BB_E2E_IMAGE_DIRECTORY);
+  }
 });

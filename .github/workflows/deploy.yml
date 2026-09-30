@@ -44,6 +44,8 @@ jobs:
       - run: touch apps/server/.env
       - run: npm audit --audit-level=high
       - run: npm run build
+      - run: npm run test:drawing
+      - run: npm run test:updates
       - run: npm run test:api
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

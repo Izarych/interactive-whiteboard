@@ -133,6 +133,17 @@ test('PostgreSQL boards: CRUD, validation, conflicts and persistence after resta
       }
     });
 
+    await t.test('preserve erased contour groups and reject invalid group identifiers', async () => {
+      document.elements[0].groupId = document.elements[0].id;
+      board = await request('PUT', `/boards/${board.id}`, { title: board.title, document, revision: board.revision }, 200);
+      assert.equal(board.document.elements[0].groupId, document.elements[0].id);
+      for (const groupId of ['not-a-uuid', null]) {
+        const invalid = structuredClone(document);
+        invalid.elements[0].groupId = groupId;
+        await request('PUT', `/boards/${board.id}`, { title: board.title, document: invalid, revision: board.revision }, 400);
+      }
+    });
+
     await t.test('upload a screenshot, serve PNG bytes and save a referenced image object', async () => {
       const png = await sharp({ create: { width: 320, height: 180, channels: 3, background: '#22c55e' } }).png().toBuffer();
       const form = new FormData();

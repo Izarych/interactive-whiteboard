@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { chromium, expect } = require('@playwright/test');
+const { version } = require('../package.json');
 
 const root = path.resolve(__dirname, '../../..');
 const executable = process.env.BLUVIBOARD_DESKTOP_EXECUTABLE || path.join(root, 'apps/desktop/src-tauri/target/release/bluviboard-desktop.exe');
@@ -68,6 +69,7 @@ async function main() {
     const pathname = new URL(route.request().url()).pathname;
     const json = (data) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(data) });
     if (pathname === '/api/auth/session') return json({ kind: 'guest', workspaceId: 'native-smoke', user: null });
+    if (pathname === '/api/desktop/latest') return json({ release: { version, downloadUrl: `https://github.com/Izarych/interactive-whiteboard/releases/download/desktop-v${version}/BluviBoard-Setup-${version}-x64.exe`, releaseUrl: `https://github.com/Izarych/interactive-whiteboard/releases/tag/desktop-v${version}` } });
     if (pathname === '/api/boards') return json([board]);
     if (pathname === '/api/boards/native-smoke') {
       if (route.request().method() === 'PUT') {
@@ -86,6 +88,10 @@ async function main() {
   await page.goto('https://bluviboard.ru/');
   await expect(page.getByTestId('canvas')).toBeVisible();
   assert.equal(await page.evaluate(() => window.__BLUVIBOARD_DESKTOP__), true);
+  assert.equal(await page.evaluate(() => window.__BLUVIBOARD_DESKTOP_VERSION__), version);
+  await page.getByRole('button', { name: 'Проверить обновления', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Обновления Windows-клиента' })).toContainText('Установлена актуальная версия');
+  await page.getByRole('region', { name: 'Обновления Windows-клиента' }).getByRole('button', { name: 'Закрыть', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Установить BluviBoard', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Скачать для Windows', exact: true })).toHaveCount(0);
 

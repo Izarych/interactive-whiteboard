@@ -41,6 +41,7 @@ jobs:
             ~/.cargo/git
             apps/desktop/src-tauri/target
           key: windows-rust-1.98.1-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+          restore-keys: windows-rust-1.98.1-
       - name: Read desktop version
         id: version
         shell: bash

@@ -10,13 +10,13 @@ import { usePageMetadata } from './seo';
 import { usePwa } from './pwa';
 import { PwaUpdateNotice } from './PwaControls';
 import { useDesktop } from './desktop';
-import { DesktopCloseNotice } from './DesktopControls';
+import { DesktopCloseNotice, DesktopUpdateNotice } from './DesktopControls';
 const AdminPanel = lazy(() => import('./AdminPanel'));
 
 function App() {
   const { updating } = usePwa();
-  const { closing } = useDesktop();
-  const leaving = updating || closing;
+  const { closing, preparingUpdate } = useDesktop();
+  const leaving = updating || closing || preparingUpdate;
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [bootError, setBootError] = useState('');
   const [auth, setAuth] = useState<{ mode: AuthMode; email?: string } | null>(null);
@@ -91,7 +91,7 @@ function App() {
     {profile && session.kind === 'user' && <ProfilePanel user={session.user} onSaved={saveProfile} onClose={() => setProfile(false)}
       onResetPassword={() => { setProfile(false); setAuth({ mode: 'forgot', email: session.user.email }); }}
       onLogout={async () => { await api.logout(); changeSession(await api.session()); }} />}
-  </div>{!closing && <PwaUpdateNotice />}<DesktopCloseNotice /></>;
+  </div><div className="application-notices">{!closing && !preparingUpdate && <PwaUpdateNotice />}{!closing && <DesktopUpdateNotice />}<DesktopCloseNotice /></div></>;
 }
 
 export default App;

@@ -40,6 +40,11 @@ export async function prepareToLeave() {
   for (const guard of guards) await guard();
 }
 export const isPwaUpdating = () => state.updating;
+export async function checkPwaUpdate() {
+  if (!('serviceWorker' in navigator)) return;
+  const registration = await navigator.serviceWorker.getRegistration('/');
+  await registration?.update();
+}
 
 export function startPwa() {
   if (started) return;

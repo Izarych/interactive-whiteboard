@@ -9,6 +9,8 @@ import { api, errorMessage } from './api';
 import { loadImage } from './images';
 import { backgroundPatterns, DEFAULT_BACKGROUND } from './background';
 import { BackgroundSizeControl } from './BackgroundSizeControl';
+import { saveShapeModifier, shapeModifiers, storedShapeModifier } from './drawing-settings';
+import type { ShapeModifier } from './drawing-settings';
 import { Circle, Download, Eraser, Grid2X2, Hand, ImagePlus, MoreHorizontal, MousePointer2, Palette, PanelLeftClose, PanelLeftOpen, Pencil, Plus, RectangleHorizontal, Redo2, Trash2, Undo2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -39,6 +41,8 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
   const [tool, setTool] = useState<Tool>('pen');
   const [color, setColor] = useState(colors[0]);
   const [width, setWidth] = useState(4);
+  const [eraserWidth, setEraserWidth] = useState(24);
+  const [shapeModifier, setShapeModifier] = useState(storedShapeModifier);
   const [history, setHistory] = useState<{ undo: DrawingElement[][]; redo: DrawingElement[][] }>({ undo: [], redo: [] });
   const stageRef = useRef<Konva.Stage | null>(null);
   const canvasRef = useRef<CanvasHandle | null>(null);
@@ -187,7 +191,7 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
     const stage = stageRef.current;
     if (!stage) return;
     setExporting(true);
-    const transformers = stage.find('Transformer');
+    const transformers = [...stage.find('Transformer'), ...stage.find('.editor-overlay')];
     try {
       await Promise.all(snapshot().document.elements.flatMap((element) => element.kind === 'image' ? [loadImage(element.assetId)] : []));
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -216,7 +220,7 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
 
   return (
     <section ref={editorRoot} className="editor" inert={disabled}>
-      <Canvas elements={board.document.elements} background={background} tool={tool} color={color} width={width} stageRef={stageRef} canvasRef={canvasRef} onChange={changeElements}
+      <Canvas elements={board.document.elements} background={background} tool={tool} color={color} width={width} eraserWidth={eraserWidth} shapeModifier={shapeModifier} stageRef={stageRef} canvasRef={canvasRef} onChange={changeElements}
         selectedImageId={selectedImageId} onSelectImage={setSelectedImageId} onImageFiles={insertImages} />
       <div className="editor-chrome">
         <header className="board-info-panel">
@@ -245,6 +249,11 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
               <h2>Карандаш</h2><div className="colors">{colors.map((value) => <button key={value} className={`color-button ${color === value ? 'active' : ''}`} style={{ backgroundColor: value }} aria-label={`Цвет ${value}`} aria-pressed={color === value} onClick={() => setColor(value)} />)}
                 <label className="custom-color" title="Произвольный цвет">+<input aria-label="Произвольный цвет" type="color" value={color} onChange={(event) => setColor(event.target.value)} /></label></div>
               <label className="width-control">Толщина<input aria-label="Толщина карандаша" type="range" min="1" max="32" value={width} onChange={(event) => setWidth(Number(event.target.value))} /><span>{width}</span></label>
+              <label className="width-control">Ластик<input aria-label="Размер ластика" type="range" min="8" max="80" value={eraserWidth} onChange={(event) => setEraserWidth(Number(event.target.value))} /><span>{eraserWidth}</span></label>
+              <label className="shape-modifier-control">Выравнивание фигур<select aria-label="Хоткей выравнивания фигур" value={shapeModifier} onChange={(event) => {
+                const value = event.target.value as ShapeModifier; setShapeModifier(value); saveShapeModifier(value);
+              }}>{shapeModifiers.map((modifier) => <option key={modifier.value} value={modifier.value}>{modifier.label}</option>)}</select></label>
+              <p className="drawing-settings-note">Удерживайте хоткей при рисовании: линия, прямоугольник, квадрат, эллипс или круг станут ровными.</p>
             </section>}
           </div>
           <button className="editor-icon-button" aria-label="Добавить изображение" title="Добавить изображение (или Ctrl+V)" onClick={() => { setPanel(null); fileInputRef.current?.click(); }}><ImagePlus size={19} /></button>
@@ -268,7 +277,7 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
       </div>
       <footer className="editor-footer"><span>{board.document.elements.length} объектов</span>
         <span>{tool === 'select' ? 'Перетаскивайте изображение · Уголки — размер · Delete — удалить' :
-          tool === 'eraser' ? 'Ластик удаляет объекты целиком' : 'Ctrl+V — вставить скриншот'}</span></footer>
+          tool === 'eraser' ? 'Ластик — точечно · Shift — весь объект' : `${shapeModifiers.find((item) => item.value === shapeModifier)!.label} — выровнять фигуру · Ctrl+V — скриншот`}</span></footer>
     </section>
   );
 }

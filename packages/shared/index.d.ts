@@ -1,5 +1,7 @@
 export interface DrawnElement {
   id: string;
+  /** Fragments of an erased contour can still be deleted as one object. */
+  groupId?: string;
   kind: 'stroke' | 'rectangle' | 'ellipse';
   color: string;
   width: number;
@@ -24,6 +26,12 @@ export interface ImageAsset {
   url: string;
   width: number;
   height: number;
+}
+
+export interface DesktopRelease {
+  version: string;
+  downloadUrl: string;
+  releaseUrl: string;
 }
 
 export interface BoardBackground {

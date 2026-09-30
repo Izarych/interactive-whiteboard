@@ -2,9 +2,10 @@ import { Download } from 'lucide-react';
 import { isDesktop } from './desktop';
 import { PwaInstallButton } from './PwaControls';
 import { version } from '../../desktop/package.json';
+import { DesktopUpdateButton } from './DesktopControls';
 
 export function InstallControls() {
-  if (isDesktop) return null;
+  if (isDesktop) return <DesktopUpdateButton />;
   const url = `https://github.com/Izarych/interactive-whiteboard/releases/download/desktop-v${version}/BluviBoard-Setup-${version}-x64.exe`;
   return <div className="install-controls">
     <a className="windows-download" href={url} target="_blank" rel="noopener noreferrer"><Download size={16} />Скачать для Windows</a>
