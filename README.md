@@ -83,6 +83,8 @@ npm run desktop:build
 
 Клиент открывает `https://bluviboard.ru`. Локальная стартовая страница встроена в исполняемый файл, профиль WebView2 хранится в каталоге приложения `ru.bluviboard.desktop` в `%LOCALAPPDATA%`. Внешние HTTP(S)-ссылки открываются в браузере.
 
+Для автоматизации WebView2 используйте `BLUVIBOARD_DESKTOP_DEBUG_PORT` — номер локального CDP-порта — и `BLUVIBOARD_DESKTOP_TEST_DATA_DIR` — абсолютный путь к отдельному тестовому профилю. Параметры передаются напрямую через API WebView2, что поддерживает проверки на Windows-runner с WebView2 150+.
+
 Установщик находится в `apps/desktop/src-tauri/target/release/bundle/nsis/`. `node apps/desktop/scripts/package.cjs` создаёт файл со стабильным именем и SHA-256 в `apps/desktop/artifacts/`.
 
 Workflow **Windows installer** собирает и проверяет настоящий Windows-клиент, сохраняет установщик как артефакт и при первом успешном запуске новой desktop-версии в `main` публикует релиз `desktop-v<version>`. Desktop-релизы имеют отдельную нумерацию и не заменяют основной релиз сайта. Для следующей версии обновите `apps/desktop/package.json`, `src-tauri/Cargo.toml`, Cargo.lock и добавьте `docs/releases/desktop/<version>.md`. Уже опубликованные установщики не перезаписываются.

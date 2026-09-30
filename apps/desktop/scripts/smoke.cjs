@@ -19,7 +19,7 @@ let releaseSave = () => {};
 
 function launch() {
   return spawn(executable, [], {
-    env: { ...process.env, WEBVIEW2_USER_DATA_FOLDER: profile, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}` },
+    env: { ...process.env, BLUVIBOARD_DESKTOP_TEST_DATA_DIR: profile, BLUVIBOARD_DESKTOP_DEBUG_PORT: String(port) },
     stdio: 'inherit',
   });
 }

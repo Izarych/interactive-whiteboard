@@ -23,7 +23,7 @@ fn main() {
         }))
         .invoke_handler(tauri::generate_handler![desktop_close])
         .setup(|app| {
-            WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
+            let mut window = WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
                 .initialization_script(
                     "if (window === window.top && location.origin === 'https://bluviboard.ru') {\
                       Object.defineProperty(window, '__BLUVIBOARD_DESKTOP__', { value: true });\
@@ -53,9 +53,26 @@ fn main() {
                         }
                     }
                     true
-                })
-                .prevent_overflow()
-                .build()?;
+                });
+            // WebView2 150+ ignores its environment arguments for elevated hosts.
+            // Pass our explicitly requested diagnostics through the WebView2 API.
+            if let Some(port) = std::env::var("BLUVIBOARD_DESKTOP_DEBUG_PORT")
+                .ok()
+                .and_then(|value| value.parse::<u16>().ok())
+                .filter(|port| *port != 0)
+            {
+                window = window.additional_browser_args(&format!(
+                    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection \
+                     --remote-debugging-address=127.0.0.1 --remote-debugging-port={port}"
+                ));
+                if let Some(directory) = std::env::var_os("BLUVIBOARD_DESKTOP_TEST_DATA_DIR") {
+                    let directory = std::path::PathBuf::from(directory);
+                    if directory.is_absolute() {
+                        window = window.data_directory(directory);
+                    }
+                }
+            }
+            window.prevent_overflow().build()?;
             Ok(())
         })
         .on_window_event(|window, event| {
