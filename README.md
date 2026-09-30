@@ -1,5 +1,9 @@
 # BluviBoard
 
+Текущая версия: **1.0.0**. Описание официального релиза: [`docs/releases/1.0.0.md`](docs/releases/1.0.0.md).
+Production: **https://bluviboard.ru**. Автодеплой проверенных коммитов `main` не создаёт теги
+и GitHub Releases; официальные релизы публикуются по отдельным версиям `X.Y.Z`.
+
 Интерактивная доска: React/TypeScript + Konva, NestJS и PostgreSQL в npm-монорепозитории.
 
 Название продукта — **BluviBoard** («БлувиБорд»). Логотип и SVG favicon находятся в

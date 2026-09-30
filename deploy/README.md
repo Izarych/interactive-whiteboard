@@ -4,7 +4,7 @@ Target: Ubuntu 24.04, Node.js 24.15, PostgreSQL 16, Nginx, systemd.
 
 ## Layout
 
-- `/opt/bluviboard/releases/<commit>` — verified immutable Linux releases.
+- `/opt/bluviboard/releases/<commit>` — production builds of CI-verified commits.
 - `/opt/bluviboard/current` — active release symlink.
 - `/etc/bluviboard/server.env` — production secrets (root:bluviboard, 0640), excluded from Git.
 - `/var/lib/bluviboard/uploads` — private image storage; served only through authenticated API.
@@ -33,12 +33,14 @@ Pushes to `main` trigger `.github/workflows/deploy.yml`:
 
 1. Locked dependency installation and vulnerability audit.
 2. Build, integration tests with PostgreSQL/MailHog, and browser tests.
-3. Production Linux archive and SHA-256 checksum.
-4. Publication of a `deploy-<commit>` prerelease only after all checks pass.
+3. Production Linux archive retained in GitHub Actions artifacts for diagnostics.
+4. A successful completed CI run authorizes that exact commit for deployment.
 
-The server polls every minute using `bluviboard-deploy.timer`, downloads only the release for current
-`main`, verifies checksum and embedded commit, atomically switches the symlink, restarts the API,
-and checks the exact commit in `/api/health`. A failed health check restores the previous release.
+The server polls every minute using `bluviboard-deploy.timer`. It checks the latest push CI run for
+the exact current `main` commit, fetches that commit, installs locked dependencies, repeats the audit,
+and builds under the unprivileged deploy user with a bounded Node heap. It then atomically switches
+the symlink, restarts the API, and checks the exact commit in `/api/health`.
+A failed build leaves the active deployment untouched; a failed health check restores the previous release.
 No inbound deployment endpoint, root SSH key, or server secret is stored in GitHub Actions.
 
 ```sh
@@ -47,7 +49,10 @@ journalctl -u bluviboard-deploy -n 50
 systemctl start bluviboard-deploy
 ```
 
-The release publisher requires GitHub Actions `contents: write` permission, scoped to the publish job.
+Deployment creates no Git tags or GitHub Releases and requires only read permission in CI.
+The separate `.github/workflows/release.yml` publishes an official GitHub Release only when a
+semantic version tag such as `1.0.0` is pushed; its release job has scoped `contents: write` permission.
+The `1.0.0` release removes the legacy `deploy-<commit>` prereleases/tags after server migration.
 
 ## Administrator
 

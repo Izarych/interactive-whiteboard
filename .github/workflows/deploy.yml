@@ -1,4 +1,4 @@
-name: Verify and publish production
+name: Verify production
 
 on:
   push:
@@ -68,20 +68,3 @@ jobs:
           name: production
           path: bluviboard-*.tar.gz*
           retention-days: 7
-  publish:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: verify
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with: { name: production }
-      - name: Publish verified deploy artifact
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          COMMIT: ${{ github.sha }}
-        run: |
-          gh release view "deploy-${COMMIT}" >/dev/null 2>&1 || gh release create "deploy-${COMMIT}" --target "$COMMIT" --prerelease --title "Deployment ${COMMIT:0:8}" --notes "Verified production artifact. No application secrets included."
-          gh release upload "deploy-${COMMIT}" bluviboard-*.tar.gz* --clobber

@@ -18,7 +18,7 @@ Implemented controls:
 - Password hashing with salted scrypt; no passwords in audit logs or production releases.
 - Upload content validation, decoded-pixel/file limits, PNG normalization, and private image storage.
 - Pinned GitHub Actions revisions; lockfile-based installs, vulnerability audit, tests before release.
-- No production/SSH secrets in GitHub; artifact checksum/commit verification and health rollback.
+- No production/SSH secrets in GitHub; exact-commit CI gating, lockfile audit, bounded unprivileged build and health rollback.
 - Root-only consistent daily DB/file/config backups with 14-day retention.
 - SSH key-only authentication; legacy TLS 1.0/1.1 disabled for the Nginx management endpoint.
 
@@ -40,3 +40,10 @@ Residual operational items:
 - Production SMTP accepted the test message locally, but Gmail rejected the sender `bluviboard-mail.ru` with 550 5.7.26 because SPF/DKIM did not pass.
 - The DNS resource was backed up and migrated to the hosting user with all 12 original records preserved; the mail domain `bluviboard.ru` was created with DKIM/DMARC.
 - The sender was changed to `no-reply@bluviboard.ru`. Authoritative DNS exposed SPF/DKIM, and Gmail accepted the new test message over verified TLS with `250 2.0.0 OK`.
+
+## Version 1.0.0 deployment update
+
+Automatic deployment now uses CI-verified source commits instead of deployment prereleases/tags.
+Only the latest successful push run for the exact `main` SHA is accepted; failed/queued CI cannot
+activate a build. Building has no root privileges and runs with a bounded Node heap. Official
+GitHub Releases are reserved for explicitly pushed semantic version tags.
