@@ -25,7 +25,7 @@ if not os.path.exists(path):
         'TRUST_PROXY': 'loopback', 'REQUIRE_ORIGIN': 'true', 'UV_THREADPOOL_SIZE': '2',
         'STORAGE_PROVIDER': 'local', 'STORAGE_LOCAL_PATH': '/var/lib/bluviboard/uploads',
         'SMTP_HOST': '127.0.0.1', 'SMTP_PORT': '25', 'SMTP_SECURE': 'false', 'SMTP_LOCAL_RELAY': 'true',
-        'MAIL_FROM': 'BluviBoard <no-reply@bluviboard-mail.ru>',
+        'MAIL_FROM': 'BluviBoard <no-reply@bluviboard.ru>',
     }
     settings.update(private)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o640)

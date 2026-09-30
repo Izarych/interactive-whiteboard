@@ -24,7 +24,7 @@ Implemented controls:
 
 Residual operational items:
 
-- The sender mailbox domain needs valid public DNS A/MX/SPF/DKIM before external mail delivery can be relied upon.
+- Monitor sender-domain A/MX/SPF/DKIM and delivery reputation; external delivery depends on these operational settings.
 - Existing hosting-panel/mail/FTP/DNS services retain their independent access surface and maintenance needs.
 - Backups on the same disk need an off-server copy to cover total server loss.
 - Keep dependencies, OS and server-panel software patched and periodically repeat application security tests.
@@ -38,3 +38,5 @@ Residual operational items:
 - PostgreSQL and API listeners were verified on 127.0.0.1, and SSH password authentication was verified disabled.
 - A consistent database/upload/config backup was created successfully.
 - Production SMTP accepted the test message locally, but Gmail rejected the sender `bluviboard-mail.ru` with 550 5.7.26 because SPF/DKIM did not pass.
+- The DNS resource was backed up and migrated to the hosting user with all 12 original records preserved; the mail domain `bluviboard.ru` was created with DKIM/DMARC.
+- The sender was changed to `no-reply@bluviboard.ru`. Authoritative DNS exposed SPF/DKIM, and Gmail accepted the new test message over verified TLS with `250 2.0.0 OK`.

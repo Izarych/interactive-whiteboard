@@ -64,6 +64,7 @@ disabled for remote SMTP: the plaintext exception is limited to loopback. The ma
 are stored only in `server.env`; local trusted relay does not require them.
 For remote submission switch to the mailbox hostname, port 587, `SMTP_REQUIRE_TLS=true`,
 `SMTP_LOCAL_RELAY=false`. DNS A/MX/SPF/DKIM for the sender domain must be valid for Gmail delivery.
+The production sender is `no-reply@bluviboard.ru`.
 
 ## Backups
 
