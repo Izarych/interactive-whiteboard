@@ -46,7 +46,7 @@ function fitsPolygon(points: Point[], polygon: Point[], tolerance: number) {
   return points.every((p) => polygon.some((a, i) => segmentDistance(p, a, polygon[(i + 1) % polygon.length]) <= tolerance));
 }
 
-/** Keep an unrecognised gesture intact; recognition only runs while its modifier is held. */
+/** Keep an unrecognised gesture intact; the caller only refines explicitly modified gestures. */
 export function improveShape(element: DrawnElement): DrawnElement {
   if (element.kind !== 'stroke') {
     const [x, y, endX, endY] = element.points;

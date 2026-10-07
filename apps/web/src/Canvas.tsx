@@ -80,6 +80,7 @@ export function Canvas({ elements, background, tool, color, width, eraserWidth =
   const [erasedPreview, setErasedPreview] = useState<DrawingElement[] | null>(null);
   const [eraserPosition, setEraserPosition] = useState<Point | null>(null);
   const gesture = useRef<{ pointerId: number; element: DrawnElement | null; erasing: DrawingElement[] | null; baseIds: Set<string>; pan: boolean; snap: boolean; last: Point; radius: number } | null>(null);
+  const keyboardModifier = useRef<boolean | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const elementsRef = useRef(elements);
   elementsRef.current = elements;
@@ -118,23 +119,30 @@ export function Canvas({ elements, background, tool, color, width, eraserWidth =
   };
   useImperativeHandle(canvasRef, () => ({ finish: () => finish() }));
 
+  useEffect(() => { keyboardModifier.current = null; }, [shapeModifier]);
+
   useEffect(() => {
     const modifier = (event: KeyboardEvent) => {
+      // Keyboard release is authoritative: pen/pointer events may carry stale modifier flags.
+      keyboardModifier.current = modifierHeld(event, shapeModifier);
       const active = gesture.current;
       if (!active) return;
       if ((event.ctrlKey || event.metaKey) && ['z', 'y'].includes(event.key.toLowerCase())) {
         finish(true); event.preventDefault(); event.stopImmediatePropagation(); return;
       }
-      if (!active.element) return;
-      active.snap = modifierHeld(event, shapeModifier);
+      if (!active.element || event.key !== shapeModifier) return;
+      // Refinement belongs to this gesture, even if the key is released before the pointer.
+      active.snap ||= keyboardModifier.current;
       setDraft(active.snap ? improveShape(active.element) : active.element);
-      if (event.key === shapeModifier) event.preventDefault();
+      event.preventDefault();
     };
-    const blur = () => finish();
+    const blur = () => { keyboardModifier.current = false; finish(); };
+    const focus = () => { keyboardModifier.current = null; };
     window.addEventListener('keydown', modifier, true);
     window.addEventListener('keyup', modifier, true);
     window.addEventListener('blur', blur);
-    return () => { window.removeEventListener('keydown', modifier, true); window.removeEventListener('keyup', modifier, true); window.removeEventListener('blur', blur); };
+    window.addEventListener('focus', focus);
+    return () => { window.removeEventListener('keydown', modifier, true); window.removeEventListener('keyup', modifier, true); window.removeEventListener('blur', blur); window.removeEventListener('focus', focus); };
   });
 
   const erase = (active: NonNullable<typeof gesture.current>, p: Point, whole: boolean) => {
@@ -196,7 +204,7 @@ export function Canvas({ elements, background, tool, color, width, eraserWidth =
             color, width, points: [...p, ...p],
           } : null;
           gesture.current = { pointerId: event.evt.pointerId, element, erasing: tool === 'eraser' && !pan ? [...elementsRef.current] : null,
-            baseIds: new Set(elementsRef.current.map((element) => element.id)), pan, snap: modifierHeld(event.evt, shapeModifier), last: p, radius: eraserWidth / 2 / view.scale };
+            baseIds: new Set(elementsRef.current.map((element) => element.id)), pan, snap: keyboardModifier.current ?? modifierHeld(event.evt, shapeModifier), last: p, radius: eraserWidth / 2 / view.scale };
           // Capture outside the stage so releasing beyond its border still commits the stroke.
           (event.evt.target as HTMLElement).setPointerCapture(event.evt.pointerId);
           if (pan) stageRef.current?.startDrag();
@@ -220,13 +228,12 @@ export function Canvas({ elements, background, tool, color, width, eraserWidth =
             if (dx * dx + dy * dy < 1 / view.scale ** 2 || previous.length >= 40000) return;
           }
           active.element = { ...active.element, points: active.element.kind === 'stroke' ? [...previous, ...p] : [...previous.slice(0, 2), ...p] };
-          active.snap = modifierHeld(event.evt, shapeModifier);
+          active.snap ||= keyboardModifier.current ?? modifierHeld(event.evt, shapeModifier);
           setDraft(active.snap ? improveShape(active.element) : active.element);
         }}
         onPointerUp={(event) => {
           const active = gesture.current;
           if (active?.pointerId !== event.evt.pointerId) return;
-          active.snap = modifierHeld(event.evt, shapeModifier);
           const p = point();
           if (p && active.erasing) erase(active, p, event.evt.shiftKey);
           finish();

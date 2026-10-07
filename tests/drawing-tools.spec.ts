@@ -13,12 +13,13 @@ async function board(context: BrowserContext, elements: object[] = []) {
   return { id: created.id as string, workspace: guest.workspaceId as string };
 }
 
-async function trace(page: Page, points: [number, number][], modifier?: string) {
+async function trace(page: Page, points: [number, number][], modifier?: string, beforeRelease?: () => Promise<void>) {
   const box = (await page.getByTestId('canvas').boundingBox())!;
   if (modifier) await page.keyboard.down(modifier);
   await page.mouse.move(box.x + points[0][0], box.y + points[0][1]);
   await page.mouse.down();
   for (const [x, y] of points.slice(1)) await page.mouse.move(box.x + x, box.y + y, { steps: 8 });
+  if (beforeRelease) await beforeRelease();
   await page.mouse.up();
   if (modifier) await page.keyboard.up(modifier);
 }
@@ -51,6 +52,76 @@ test('Shift recognises a hand-drawn line and square, and the shape modifier can 
     await page.reload();
     await page.getByRole('button', { name: 'Цвет и толщина', exact: true }).click();
     await expect(page.getByLabel('Хоткей выравнивания фигур')).toHaveValue('Control');
+  } finally { await cleanupWorkspaces([current.workspace], process.env.BB_E2E_IMAGE_DIRECTORY); }
+});
+
+test('releasing Shift before the pointer preserves the refined line and square, including a late Shift press', async ({ page, context }) => {
+  const current = await board(context);
+  try {
+    await page.goto('/');
+    await expect(page.getByTestId('canvas')).toBeVisible();
+    await trace(page, [[100, 260], [180, 265], [260, 257], [340, 263]], 'Shift', async () => {
+      await page.keyboard.up('Shift');
+      const box = (await page.getByTestId('canvas').boundingBox())!;
+      await page.mouse.move(box.x + 360, box.y + 265, { steps: 4 });
+    });
+    await trace(page, [[420, 260], [570, 263], [568, 411], [419, 408], [420, 260]], undefined, async () => {
+      await page.keyboard.down('Shift');
+      await page.keyboard.up('Shift');
+    });
+    const elements = await saved(page, context, current.id);
+    expect(elements[0].points).toHaveLength(4);
+    expect(elements[0].points[1]).toBe(elements[0].points[3]);
+    expect(elements[0].points[2]).toBeGreaterThan(350);
+    expect(elements[1].kind).toBe('rectangle');
+    expect(Math.abs(elements[1].points[2] - elements[1].points[0])).toBeCloseTo(Math.abs(elements[1].points[3] - elements[1].points[1]), 5);
+    await page.reload();
+    expect(await saved(page, context, current.id)).toEqual(elements);
+  } finally { await cleanupWorkspaces([current.workspace], process.env.BB_E2E_IMAGE_DIRECTORY); }
+});
+
+test('freehand digits and lines remain unchanged before and after a Shift-refined stroke', async ({ page, context }) => {
+  const current = await board(context);
+  const zero: [number, number][] = Array.from({ length: 33 }, (_, i) => [170 + 55 * Math.cos(i * Math.PI / 16), 330 + 85 * Math.sin(i * Math.PI / 16)]);
+  const line: [number, number][] = [[100, 520], [180, 525], [260, 517], [340, 523]];
+  try {
+    await page.goto('/');
+    await expect(page.getByTestId('canvas')).toBeVisible();
+    await trace(page, zero);
+    await trace(page, line);
+    await trace(page, [[430, 520], [510, 525], [590, 517], [670, 523]], 'Shift');
+    await trace(page, zero.map(([x, y]) => [x + 350, y]));
+    await trace(page, line.map(([x, y]) => [x, y + 120]));
+    const elements = await saved(page, context, current.id);
+    for (const index of [0, 1, 3, 4]) {
+      expect(elements[index].kind).toBe('stroke');
+      expect(elements[index].points.length).toBeGreaterThan(4);
+    }
+    expect(elements[0].points.length).toBe(elements[3].points.length);
+    for (const [x, y] of line) expect(elements[1].points.some((value, i) => i % 2 === 0 && value === x && elements[1].points[i + 1] === y)).toBe(true);
+    expect(elements[2].points).toHaveLength(4);
+    expect(elements[4].points).toEqual(elements[1].points.map((value, i) => i % 2 ? value + 120 : value));
+  } finally { await cleanupWorkspaces([current.workspace], process.env.BB_E2E_IMAGE_DIRECTORY); }
+});
+
+test('a released keyboard modifier overrides stale pointer flags on subsequent freehand strokes', async ({ page, context }) => {
+  const current = await board(context);
+  try {
+    await page.goto('/');
+    await expect(page.getByTestId('canvas')).toBeVisible();
+    await trace(page, [[100, 260], [180, 265], [260, 257], [340, 263]], 'Shift');
+    // Simulate pointer input that continues reporting Shift after its keyboard keyup.
+    await page.evaluate(() => {
+      for (const type of ['pointerdown', 'pointermove', 'pointerup']) {
+        window.addEventListener(type, (event) => Object.defineProperty(event, 'shiftKey', { value: true }), true);
+      }
+    });
+    await trace(page, [[100, 400], [180, 405], [260, 397], [340, 403]]);
+    await trace(page, [[430, 400], [510, 405], [590, 397], [670, 403]], 'Shift');
+    const elements = await saved(page, context, current.id);
+    expect(elements[0].points).toHaveLength(4);
+    expect(elements[1].points.length).toBeGreaterThan(4);
+    expect(elements[2].points).toHaveLength(4);
   } finally { await cleanupWorkspaces([current.workspace], process.env.BB_E2E_IMAGE_DIRECTORY); }
 });
 
