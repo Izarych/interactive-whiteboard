@@ -231,6 +231,8 @@ export class AuthService {
         if (!source.rows[0]?.user_id && !source.rows[0]?.merged_into_id) {
           await client.query('UPDATE boards SET owner_id = $1 WHERE owner_id = $2', [workspaceId, current.workspaceId]);
           await client.query('UPDATE image_assets SET owner_id = $1 WHERE owner_id = $2', [workspaceId, current.workspaceId]);
+          await client.query(`UPDATE workspace_owners target SET tool_shortcuts=source.tool_shortcuts
+            FROM workspace_owners source WHERE target.id=$1 AND source.id=$2 AND target.tool_shortcuts='{}'::jsonb`, [workspaceId, current.workspaceId]);
           await client.query('UPDATE workspace_owners SET merged_into_id = $1 WHERE id = $2', [workspaceId, current.workspaceId]);
           await client.query('DELETE FROM sessions WHERE workspace_id = $1', [current.workspaceId]);
           await client.query('DELETE FROM auth_challenges WHERE workspace_id = $1', [current.workspaceId]);

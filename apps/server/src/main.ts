@@ -27,7 +27,7 @@ async function bootstrap() {
     next();
   });
   app.enableShutdownHooks();
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api', { exclude: ['robots.txt', 'sitemap.xml'] });
   app.enableCors({ origin: webOrigin, credentials: true });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
 

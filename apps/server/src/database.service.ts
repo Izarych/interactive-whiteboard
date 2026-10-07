@@ -87,6 +87,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked_at timestamptz;
       ALTER TABLE workspace_owners ADD COLUMN IF NOT EXISTS blocked_at timestamptz;
       ALTER TABLE workspace_owners ADD COLUMN IF NOT EXISTS last_seen_at timestamptz;
+      ALTER TABLE workspace_owners ADD COLUMN IF NOT EXISTS tool_shortcuts jsonb NOT NULL DEFAULT '{}'::jsonb;
       ALTER TABLE sessions ADD COLUMN IF NOT EXISTS last_seen_at timestamptz NOT NULL DEFAULT now();
       CREATE TABLE IF NOT EXISTS activity_events (
         id bigserial PRIMARY KEY,

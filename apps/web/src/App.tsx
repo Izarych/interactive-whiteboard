@@ -4,6 +4,7 @@ import { api, errorMessage } from './api';
 import { AuthPanel, pendingRegistration } from './AuthPanel';
 import type { AuthMode } from './AuthPanel';
 import { ProfilePanel } from './ProfilePanel';
+import { PublicIntro } from './PublicIntro';
 import { clearImageCache } from './images';
 import Workspace from './Workspace';
 import { usePageMetadata } from './seo';
@@ -66,11 +67,14 @@ function App() {
     if (session?.kind === 'user') changeSession({ ...session, user });
   };
 
-  if (!session) return <main className="auth-shell"><section className="auth-card auth-loading">
-    <img src="/favicon.svg" width="64" height="64" alt="BluviBoard" />
-    <p>{bootError || 'Открываем ваше пространство…'}</p>
-    {bootError && <button className="primary-button" onClick={() => { void load(); }}>Попробовать снова</button>}
-  </section></main>;
+  if (!session) return <main className={`auth-shell ${admin ? '' : 'auth-shell--public'}`}>
+    {!admin && <PublicIntro />}
+    <section className="auth-card auth-loading">
+      <img src="/favicon.svg" width="64" height="64" alt="BluviBoard" />
+      <p>{bootError || 'Открываем ваше пространство…'}</p>
+      {bootError && <button className="primary-button" onClick={() => { void load(); }}>Попробовать снова</button>}
+    </section>
+  </main>;
 
   const active = session.kind !== 'anonymous';
   const needsAdminLogin = admin && (session.kind !== 'user' || session.user.role !== 'admin');

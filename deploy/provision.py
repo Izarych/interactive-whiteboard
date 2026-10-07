@@ -24,6 +24,7 @@ if not os.path.exists(path):
         'AUTH_SECRET': secrets.token_hex(32), 'COOKIE_SECURE': 'true', 'WEB_ORIGIN': 'https://bluviboard.ru',
         'TRUST_PROXY': 'loopback', 'REQUIRE_ORIGIN': 'true', 'UV_THREADPOOL_SIZE': '2',
         'STORAGE_PROVIDER': 'local', 'STORAGE_LOCAL_PATH': '/var/lib/bluviboard/uploads',
+        'SITE_FILES_PATH': '/var/lib/bluviboard/site-files',
         'SMTP_HOST': '127.0.0.1', 'SMTP_PORT': '25', 'SMTP_SECURE': 'false', 'SMTP_LOCAL_RELAY': 'true',
         'MAIL_FROM': 'BluviBoard <no-reply@bluviboard.ru>',
     }

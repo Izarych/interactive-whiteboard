@@ -25,6 +25,7 @@ id bluviboard-deploy >/dev/null 2>&1 || useradd --system --home /opt/bluviboard 
 install -d -m 755 -o bluviboard-deploy -g bluviboard-deploy /opt/bluviboard /opt/bluviboard/releases /opt/bluviboard/tmp
 install -d -m 755 /opt/bluviboard/ops /etc/bluviboard /var/lib/bluviboard/acme
 install -d -m 750 -o bluviboard -g bluviboard /var/lib/bluviboard/uploads
+install -d -m 755 -o bluviboard -g bluviboard /var/lib/bluviboard/site-files
 install -d -m 700 /var/backups/bluviboard
 systemctl enable --now postgresql
 python3 "$HERE/provision.py" "$HERE/private.env"

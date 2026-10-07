@@ -1,6 +1,6 @@
 import { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type Konva from 'konva';
-import type { Board, BoardBackground, DrawingElement, ImageElement } from '@whiteboard/shared';
+import type { Board, BoardBackground, DrawingElement, ImageElement, ToolShortcuts } from '@whiteboard/shared';
 import { Canvas } from './Canvas';
 import type { Tool } from './Canvas';
 import type { CanvasHandle } from './Canvas';
@@ -11,7 +11,9 @@ import { backgroundPatterns, DEFAULT_BACKGROUND } from './background';
 import { BackgroundSizeControl } from './BackgroundSizeControl';
 import { saveShapeModifier, shapeModifiers, storedShapeModifier } from './drawing-settings';
 import type { ShapeModifier } from './drawing-settings';
-import { Circle, Download, Eraser, Grid2X2, Hand, ImagePlus, MoreHorizontal, MousePointer2, Palette, PanelLeftClose, PanelLeftOpen, Pencil, Plus, RectangleHorizontal, Redo2, Trash2, Undo2 } from 'lucide-react';
+import { ToolShortcutEditor } from './ToolShortcutEditor';
+import { shortcutLabel, shortcutMatches } from './tool-shortcuts';
+import { Circle, Download, Eraser, Grid2X2, Hand, ImagePlus, Keyboard, MoreHorizontal, MousePointer2, Palette, PanelLeftClose, PanelLeftOpen, Pencil, Plus, RectangleHorizontal, Redo2, Trash2, Undo2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 export interface EditorHandle {
@@ -29,13 +31,18 @@ const tools: { id: Tool; label: string; icon: LucideIcon }[] = [
 ];
 const colors = ['#202938', '#64748b', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6'];
 
-export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sidebarCollapsed, onToggleSidebar, onNewBoard }: {
+export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sidebarCollapsed, onToggleSidebar, onNewBoard, toolShortcuts, shortcutsReady, shortcutsError, onReloadShortcuts, onSaveShortcuts }: {
   initial: Board; onSaved: (board: Board) => void; onCopy: () => void;
   editorRef: React.RefObject<EditorHandle | null>;
   disabled: boolean;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   onNewBoard: () => void;
+  toolShortcuts: ToolShortcuts;
+  shortcutsReady: boolean;
+  shortcutsError: string;
+  onReloadShortcuts: () => void;
+  onSaveShortcuts: (shortcuts: ToolShortcuts) => Promise<void>;
 }) {
   const { board, edit, flush, status, error, draftWarning, snapshot } = useBoard(initial, onSaved);
   const [tool, setTool] = useState<Tool>('pen');
@@ -54,8 +61,15 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
   const [imageError, setImageError] = useState('');
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [panel, setPanel] = useState<'pen' | 'background' | 'board' | null>(null);
+  const [panel, setPanel] = useState<'pen' | 'background' | 'board' | 'shortcut' | null>(null);
+  const [shortcutTool, setShortcutTool] = useState<Tool>('pen');
+  const previousTool = useRef<Tool>('pen');
   const editorRoot = useRef<HTMLElement>(null);
+  const selectTool = (next: Tool) => {
+    canvasRef.current?.finish();
+    if (next !== tool) previousTool.current = tool;
+    setTool(next); setPanel(null);
+  };
   const background = board.document.background ?? DEFAULT_BACKGROUND;
   const saveText = uploading ? 'Загрузка изображения…' : status === 'saved' ? 'Сохранено' : status === 'saving' ? 'Сохранение…' : status === 'pending' ? 'Есть изменения' : 'Не сохранено';
   const togglePanel = (next: NonNullable<typeof panel>) => setPanel((previous) => previous === next ? null : next);
@@ -125,7 +139,7 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
           };
           changeElements([...snapshot().document.elements, image]);
           setSelectedImageId(image.id);
-          setTool('select');
+          selectTool('select');
         } catch (reason) {
           failedUpload.current = true;
           setImageError(errorMessage(reason));
@@ -158,7 +172,15 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (disabled) return;
-      if (event.target instanceof HTMLElement && (['INPUT', 'TEXTAREA'].includes(event.target.tagName) || event.target.isContentEditable)) return;
+      if (event.target instanceof HTMLElement && (['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName) || event.target.isContentEditable)) return;
+      if (shortcutsReady && panel !== 'shortcut') {
+        const matched = tools.find((item) => toolShortcuts[item.id] && shortcutMatches(toolShortcuts[item.id]!, event));
+        if (matched) {
+          event.preventDefault();
+          if (!event.repeat) selectTool(tool === matched.id ? previousTool.current : matched.id);
+          return;
+        }
+      }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
         event.preventDefault();
         if (event.shiftKey) redo(); else undo();
@@ -241,7 +263,13 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
           </div>
         </header>
         <div className="tool-dock" role="toolbar" aria-label="Инструменты рисования">
-          {tools.map((item) => <button key={item.id} title={item.label} aria-label={item.label} aria-pressed={tool === item.id} className={`editor-icon-button ${tool === item.id ? 'active' : ''}`} onClick={() => { setTool(item.id); setPanel(null); }}><item.icon size={19} strokeWidth={1.8} /></button>)}
+          {tools.map((item) => <button key={item.id} title={`${item.label}${toolShortcuts[item.id] ? ` (${shortcutLabel(toolShortcuts[item.id])})` : ''} · Правой кнопкой — настроить хоткей`} aria-label={item.label} aria-pressed={tool === item.id} className={`editor-icon-button ${tool === item.id ? 'active' : ''}`} onClick={() => selectTool(item.id)} onContextMenu={(event) => {
+            event.preventDefault(); setShortcutTool(item.id); setPanel('shortcut');
+          }}><item.icon size={19} strokeWidth={1.8} /></button>)}
+          <div className="editor-popover-anchor" data-editor-panel="shortcut">
+            <button className={`editor-icon-button ${panel === 'shortcut' ? 'active' : ''}`} aria-label="Настроить хоткей инструмента" title="Настроить хоткей выбранного инструмента" aria-expanded={panel === 'shortcut'} aria-controls="tool-shortcut-settings" onClick={() => { setShortcutTool(tool); togglePanel('shortcut'); }}><Keyboard size={19} /></button>
+            {panel === 'shortcut' && <ToolShortcutEditor key={shortcutTool} tool={shortcutTool} tools={tools} shortcuts={toolShortcuts} ready={shortcutsReady} loadError={shortcutsError} onTool={setShortcutTool} onReload={onReloadShortcuts} onSave={onSaveShortcuts} />}
+          </div>
           <span className="editor-divider" />
           <div className="editor-popover-anchor" data-editor-panel="pen">
             <button className={`editor-icon-button pen-settings-button ${panel === 'pen' ? 'active' : ''}`} aria-label="Цвет и толщина" title="Цвет и толщина" aria-expanded={panel === 'pen'} aria-controls="pen-settings" onClick={() => togglePanel('pen')}><Palette size={19} /><span className="current-color" style={{ backgroundColor: color }} /></button>
@@ -253,7 +281,7 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
               <label className="shape-modifier-control">Выравнивание фигур<select aria-label="Хоткей выравнивания фигур" value={shapeModifier} onChange={(event) => {
                 const value = event.target.value as ShapeModifier; setShapeModifier(value); saveShapeModifier(value);
               }}>{shapeModifiers.map((modifier) => <option key={modifier.value} value={modifier.value}>{modifier.label}</option>)}</select></label>
-              <p className="drawing-settings-note">Удерживайте хоткей при рисовании: линия, прямоугольник, квадрат, эллипс или круг станут ровными.</p>
+              <p className="drawing-settings-note">Нажмите модификатор во время штриха: выравнивание сохраняется до его завершения.</p>
             </section>}
           </div>
           <button className="editor-icon-button" aria-label="Добавить изображение" title="Добавить изображение (или Ctrl+V)" onClick={() => { setPanel(null); fileInputRef.current?.click(); }}><ImagePlus size={19} /></button>

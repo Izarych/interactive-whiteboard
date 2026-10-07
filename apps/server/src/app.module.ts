@@ -16,10 +16,13 @@ import { AdminService } from './admin/admin.service';
 import { AdminController } from './admin/admin.controller';
 import { DesktopReleaseController } from './desktop-release.controller';
 import { DesktopReleaseService } from './desktop-release.service';
+import { ToolShortcutsController } from './tool-shortcuts.controller';
+import { SiteFilesController } from './site-files.controller';
+import { SiteFilesService } from './site-files.service';
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
-  controllers: [AppController, BoardsController, AssetsController, AuthController, AdminController, DesktopReleaseController],
-  providers: [DatabaseService, BoardsService, StorageService, AssetsService, AuthService, AuthGuard, MailService, AdminGuard, AdminService, DesktopReleaseService],
+  controllers: [AppController, BoardsController, AssetsController, AuthController, AdminController, DesktopReleaseController, ToolShortcutsController, SiteFilesController],
+  providers: [DatabaseService, BoardsService, StorageService, AssetsService, AuthService, AuthGuard, MailService, AdminGuard, AdminService, DesktopReleaseService, SiteFilesService],
 })
 export class AppModule {}

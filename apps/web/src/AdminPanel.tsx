@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { ArrowLeft, Ban, Check, ChevronLeft, ChevronRight, CircleUserRound, Eye, FileImage, Ghost, LayoutDashboard, LogOut, Mail, PanelsTopLeft, Pencil, Plus, RefreshCw, Search, ShieldCheck, Trash2, Users, X } from 'lucide-react';
+import { ArrowLeft, Ban, Check, ChevronLeft, ChevronRight, CircleUserRound, Eye, FileImage, FileText, Ghost, LayoutDashboard, LogOut, Mail, PanelsTopLeft, Pencil, Plus, RefreshCw, Search, ShieldCheck, Trash2, Users, X } from 'lucide-react';
 import type { AdminAsset, AdminAudit, AdminBoard, AdminGuest, AdminOverview, AdminPage, AdminUser, Board, UserProfile } from '@whiteboard/shared';
 import type Konva from 'konva';
 import { adminApi } from './adminApi';
@@ -8,6 +8,7 @@ import { errorMessage } from './api';
 import { AvatarPicker } from './AvatarPicker';
 import { Canvas } from './Canvas';
 import { DEFAULT_BACKGROUND } from './background';
+import { SiteFilesEditor } from './SiteFilesEditor';
 import './admin.css';
 
 const sections = [
@@ -15,6 +16,7 @@ const sections = [
   { id: 'guests', label: 'Гости', icon: Ghost }, { id: 'boards', label: 'Доски', icon: PanelsTopLeft },
   { id: 'images', label: 'Изображения', icon: FileImage }, { id: 'audit', label: 'Журнал действий', icon: ShieldCheck },
   { id: 'mail', label: 'Почта', icon: Mail },
+  { id: 'site-files', label: 'Файлы сайта', icon: FileText },
 ] as const;
 type Section = typeof sections[number]['id'];
 type Entry = AdminUser | AdminGuest | AdminBoard | AdminAsset | AdminAudit;
@@ -26,6 +28,7 @@ const routeSection = (): Section => sections.find((item) => item.id === window.l
 const actions: Record<string, string> = { admin_created_cli: 'Создан администратор (CLI)', user_created: 'Создан пользователь', user_updated: 'Обновлён профиль', avatar_changed: 'Изменён аватар', password_changed: 'Изменён пароль', users_blocked: 'Пользователь заблокирован', users_unblocked: 'Пользователь разблокирован', users_deleted: 'Удалён пользователь', guests_blocked: 'Гость заблокирован', guests_unblocked: 'Гость разблокирован', guests_deleted: 'Удалён гость', guest_transferred: 'Доски гостя переданы аккаунту', sessions_revoked: 'Завершены сессии', board_renamed: 'Доска переименована', board_cleared: 'Холст очищен', board_deleted: 'Доска удалена', image_deleted: 'Изображение удалено' };
 
 actions.role_changed = 'Изменена роль пользователя';
+actions.site_file_updated = 'Обновлён файл сайта';
 
 export default function AdminPanel({ user, blocked, onBack, onProfile, onLogout }: {
   user: UserProfile; blocked: boolean; onBack: () => void; onProfile: () => void; onLogout: () => Promise<void>;
@@ -55,7 +58,7 @@ export default function AdminPanel({ user, blocked, onBack, onProfile, onLogout 
     setLoading(true); setError('');
     try {
       if (section === 'overview') { const result = await adminApi.overview(days); if (version === generation.current) setOverview(result); }
-      else if (section !== 'mail') {
+      else if (section !== 'mail' && section !== 'site-files') {
         const result = section === 'users' ? await adminApi.users(page, search, status) : section === 'guests' ? await adminApi.guests(page, search, status)
           : section === 'boards' ? await adminApi.boards(page, search) : section === 'images' ? await adminApi.images(page, search) : await adminApi.audit(page, search);
         if (version === generation.current) setData(result);
@@ -150,7 +153,7 @@ export default function AdminPanel({ user, blocked, onBack, onProfile, onLogout 
                 <section className="admin-card"><div className="admin-card-heading"><h3>Последние доски</h3><button onClick={() => navigate('boards')}>Все доски →</button></div>{overview.recentBoards.map((item) => <button className="admin-recent-item admin-recent-board" key={item.id} onClick={() => { void openBoard(item.id); }}><span className="admin-avatar board"><PanelsTopLeft size={16} /></span><div><strong>{item.title}</strong><small>{owner(item)}</small></div><span>{item.elements} объектов</span></button>)}{!overview.recentBoards.length && <p className="admin-empty">Доски появятся здесь после создания</p>}</section></div>
             </>}{loading && !overview && <p className="admin-empty">Загружаем аналитику…</p>}
           </> : section === 'mail' ? <section className="admin-card admin-mail-card"><div className="admin-mail-icon"><Mail size={30} /></div><h2>Письма, которые приятно открыть</h2><p>Проверьте фирменное письмо BluviBoard перед отправкой пользователям.</p><form onSubmit={(event) => { event.preventDefault(); void run(() => adminApi.previewMail(email), 'Тестовое письмо отправлено'); }}><label className="form-label">Почта получателя<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label><button className="primary-button" disabled={working}>Отправить тестовое письмо</button></form><small>Письмо-пример не создаёт аккаунт и не меняет пароль.</small></section>
-            : <section className="admin-card admin-table-card"><div className="admin-table-toolbar"><div className="admin-search"><Search size={16} /><input aria-label="Поиск в админ-панели" placeholder={section === 'users' ? 'Имя или почта…' : section === 'guests' ? 'ID гостя…' : 'Поиск…'} value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></div>
+            : section === 'site-files' ? <SiteFilesEditor /> : <section className="admin-card admin-table-card"><div className="admin-table-toolbar"><div className="admin-search"><Search size={16} /><input aria-label="Поиск в админ-панели" placeholder={section === 'users' ? 'Имя или почта…' : section === 'guests' ? 'ID гостя…' : 'Поиск…'} value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></div>
               {['users', 'guests'].includes(section) && <select aria-label="Статус записей" value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }}><option value="all">Все статусы</option><option value="active">Активные</option><option value="blocked">Заблокированные</option></select>}
               <button className="admin-icon-button" aria-label="Обновить список" onClick={() => { void load(); }}><RefreshCw size={16} /></button>
               {section === 'users' && <button className="primary-button admin-create-user" onClick={() => setModal({ kind: 'user' })}><Plus size={15} />Новый пользователь</button>}</div>

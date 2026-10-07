@@ -1,7 +1,7 @@
 import { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Circle, Ellipse, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from 'react-konva';
 import type Konva from 'konva';
-import type { BoardBackground, DrawnElement, DrawingElement, ImageElement } from '@whiteboard/shared';
+import type { BoardBackground, DrawnElement, DrawingElement, DrawingTool, ImageElement } from '@whiteboard/shared';
 import { loadImage } from './images';
 import { backgroundImages } from './background';
 import { eraseOutline, improveShape, touchesOutline } from './drawing-geometry';
@@ -9,7 +9,7 @@ import type { Point } from './drawing-geometry';
 import { modifierHeld } from './drawing-settings';
 import type { ShapeModifier } from './drawing-settings';
 
-export type Tool = 'pen' | 'eraser' | 'rectangle' | 'ellipse' | 'hand' | 'select';
+export type Tool = DrawingTool;
 export interface CanvasHandle { finish: () => void }
 interface Props {
   canvasRef?: React.RefObject<CanvasHandle | null>;

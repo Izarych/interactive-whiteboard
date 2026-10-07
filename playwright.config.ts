@@ -26,6 +26,7 @@ export default defineConfig({
       cwd: path.resolve('apps/server'),
       url: 'http://localhost:3102/api/health',
       env: { DATABASE_URL: databaseUrl.toString(), PORT: '3102', WEB_ORIGIN: 'http://localhost:5174', STORAGE_PROVIDER: 'local', STORAGE_LOCAL_PATH: imageDirectory,
+        SITE_FILES_PATH: path.join(imageDirectory, 'site-files'),
         AUTH_SECRET: 'browser-test-only-code-hashing-secret-at-least-32-characters', LEGACY_OWNER_EMAIL: '', COOKIE_SECURE: 'false',
         SMTP_HOST: '127.0.0.1', SMTP_PORT: '1025', SMTP_SECURE: 'false', SMTP_USER: '', SMTP_PASSWORD: '' },
       reuseExistingServer: false,

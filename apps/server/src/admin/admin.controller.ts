@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { AdminGuard } from './admin.guard';
@@ -8,11 +8,15 @@ import type { AuthenticatedRequest } from '../auth/auth.types';
 import { EmailDto } from '../auth/auth.dto';
 import { MailService } from '../auth/mail.service';
 import { MAX_IMAGE_BYTES } from '../assets.service';
+import { SiteFilesService } from '../site-files.service';
+import { UpdateSiteFileDto } from '../site-files.dto';
 
 @Controller('admin')
 @UseGuards(AdminGuard)
 export class AdminController {
-  constructor(private readonly admin: AdminService, private readonly mail: MailService) {}
+  constructor(private readonly admin: AdminService, private readonly mail: MailService, private readonly files: SiteFilesService) {}
+  @Get('site-files') siteFiles() { return this.files.list(); }
+  @Put('site-files/:name') updateSiteFile(@Req() request: AuthenticatedRequest, @Param('name') name: string, @Body() dto: UpdateSiteFileDto) { return this.admin.updateSiteFile(request.auth, name, dto); }
   @Get('overview') overview(@Query() query: OverviewQueryDto) { return this.admin.overview(query.days); }
   @Get('users') users(@Query() query: AdminQueryDto) { return this.admin.users(query); }
   @Post('users') create(@Req() request: AuthenticatedRequest, @Body() dto: AdminCreateUserDto) { return this.admin.createUser(request.auth, dto); }

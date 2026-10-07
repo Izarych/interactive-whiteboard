@@ -1,9 +1,11 @@
-import type { AdminAsset, AdminAudit, AdminBoard, AdminGuest, AdminOverview, AdminPage, AdminUser, Board } from '@whiteboard/shared';
+import type { AdminAsset, AdminAudit, AdminBoard, AdminGuest, AdminOverview, AdminPage, AdminUser, Board, SiteFile, SiteFileName } from '@whiteboard/shared';
 import { request } from './api';
 
 const write = (method: string, body?: object): RequestInit => ({ method, body: body ? JSON.stringify(body) : undefined });
 const query = (page: number, search: string, status: string) => `?page=${page}&pageSize=20&search=${encodeURIComponent(search)}&status=${status}`;
 export const adminApi = {
+  siteFiles: () => request<SiteFile[]>('/admin/site-files'),
+  saveSiteFile: (name: SiteFileName, content: string, revision: string | null) => request<SiteFile>(`/admin/site-files/${name}`, write('PUT', { content, revision })),
   overview: (days: number) => request<AdminOverview>(`/admin/overview?days=${days}`),
   users: (page: number, search: string, status: string) => request<AdminPage<AdminUser>>(`/admin/users${query(page, search, status)}`),
   guests: (page: number, search: string, status: string) => request<AdminPage<AdminGuest>>(`/admin/guests${query(page, search, status)}`),

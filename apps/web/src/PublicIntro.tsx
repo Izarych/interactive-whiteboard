@@ -8,7 +8,7 @@ export function PublicIntro() {
     <link itemProp="url" href="https://bluviboard.ru/" />
     <div className="public-brand"><img src="/favicon.svg" alt="" /><span>BluviBoard</span></div>
     <span className="public-eyebrow">ПРОСТРАНСТВО ДЛЯ ВАШИХ ИДЕЙ</span>
-    <h1>Онлайн-доска<br />для идей и заметок</h1>
+    <h1>Онлайн-доска<br /> для идей и заметок</h1>
     <p itemProp="description">Рисуйте, записывайте идеи и собирайте скриншоты в одном пространстве. Создавайте несколько досок, выбирайте клетчатый фон и сохраняйте важное автоматически.</p>
     <ul>
       <li><span>✎</span><div><strong>Рисуйте без ограничений</strong><small>Карандаш, цвета, фигуры и изображения</small></div></li>

@@ -28,6 +28,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': process.env.API_PROXY_TARGET ?? 'http://localhost:3000',
+      '/robots.txt': process.env.API_PROXY_TARGET ?? 'http://localhost:3000',
+      '/sitemap.xml': process.env.API_PROXY_TARGET ?? 'http://localhost:3000',
     },
   },
 });

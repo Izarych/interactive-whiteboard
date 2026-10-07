@@ -54,6 +54,7 @@ function closeWindow() {
 async function main() {
   const now = new Date().toISOString();
   let board = { id: 'native-smoke', title: 'Native smoke', revision: 1, createdAt: now, updatedAt: now, document: { version: 1, elements: [] } };
+  let shortcuts = {};
   let saved = false;
   const saveGate = new Promise((resolve) => { releaseSave = resolve; });
   child = launch();
@@ -69,6 +70,10 @@ async function main() {
     const pathname = new URL(route.request().url()).pathname;
     const json = (data) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(data) });
     if (pathname === '/api/auth/session') return json({ kind: 'guest', workspaceId: 'native-smoke', user: null });
+    if (pathname === '/api/preferences/tools') {
+      if (route.request().method() === 'PUT') shortcuts = route.request().postDataJSON().shortcuts;
+      return json({ shortcuts });
+    }
     if (pathname === '/api/desktop/latest') return json({ release: { version, downloadUrl: `https://github.com/Izarych/interactive-whiteboard/releases/download/desktop-v${version}/BluviBoard-Setup-${version}-x64.exe`, releaseUrl: `https://github.com/Izarych/interactive-whiteboard/releases/tag/desktop-v${version}` } });
     if (pathname === '/api/boards') return json([board]);
     if (pathname === '/api/boards/native-smoke') {
@@ -94,6 +99,19 @@ async function main() {
   await page.getByRole('region', { name: 'Обновления Windows-клиента' }).getByRole('button', { name: 'Закрыть', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Установить BluviBoard', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Скачать для Windows', exact: true })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Ластик', exact: true }).click({ button: 'right' });
+  const shortcutInput = page.getByRole('textbox', { name: 'Хоткей: Ластик', exact: true });
+  await expect(shortcutInput).toBeEnabled();
+  await shortcutInput.focus();
+  await page.keyboard.press('CapsLock');
+  await page.getByRole('button', { name: 'Сохранить хоткей', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Хоткей сохранён' })).toBeVisible();
+  await page.getByRole('button', { name: 'Карандаш', exact: true }).click();
+  await page.keyboard.press('CapsLock');
+  await expect(page.getByRole('button', { name: 'Ластик', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('CapsLock');
+  await expect(page.getByRole('button', { name: 'Карандаш', exact: true })).toHaveAttribute('aria-pressed', 'true');
 
   const second = launch();
   await exited(second);
@@ -125,7 +143,7 @@ async function main() {
   assert.ok((await reopened.cookies('https://bluviboard.ru/')).some((cookie) => cookie.name === 'native-persistence-check' && cookie.value === 'persisted'));
   assert.equal(await page.evaluate(() => localStorage.getItem('native-persistence-check')), 'persisted');
   assert.deepEqual(errors, []);
-  console.log('Native Windows smoke passed: WebView2, desktop UI, single instance, cookies/storage persistence, and save-before-close.');
+  console.log('Native Windows smoke passed: WebView2, desktop UI, tool shortcuts, single instance, cookies/storage persistence, and save-before-close.');
 }
 
 main().catch(async (error) => {

@@ -21,6 +21,23 @@ export interface ImageElement {
 
 export type DrawingElement = DrawnElement | ImageElement;
 
+export type DrawingTool = 'pen' | 'eraser' | 'rectangle' | 'ellipse' | 'hand' | 'select';
+export interface ToolShortcut {
+  code: string;
+  ctrl: boolean;
+  alt: boolean;
+  shift: boolean;
+  meta: boolean;
+}
+export type ToolShortcuts = Partial<Record<DrawingTool, ToolShortcut>>;
+
+export type SiteFileName = 'robots.txt' | 'sitemap.xml';
+export interface SiteFile {
+  name: SiteFileName;
+  content: string;
+  revision: string | null;
+}
+
 export interface ImageAsset {
   id: string;
   url: string;

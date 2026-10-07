@@ -1,6 +1,6 @@
 {
   "name": "interactive-whiteboard",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -22,6 +22,7 @@
     "test:api": "node --test tests/boards-api.test.cjs tests/auth-api.test.cjs",
     "test:drawing": "node --test tests/drawing-geometry.test.cjs",
     "test:updates": "node --test tests/desktop-release.test.cjs tests/desktop-package.test.cjs",
+    "test:site-files": "node --test tests/site-files.test.cjs",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

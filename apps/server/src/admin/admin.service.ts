@@ -9,6 +9,8 @@ import { AssetsService } from '../assets.service';
 import { hashPassword, verifyPassword } from '../auth/auth.crypto';
 import type { AuthContext } from '../auth/auth.types';
 import { AdminCreateUserDto, AdminQueryDto, AdminUpdateUserDto } from './admin.dto';
+import { SiteFilesService } from '../site-files.service';
+import { UpdateSiteFileDto } from '../site-files.dto';
 
 const userColumns = `u.id, u.email, u.name, u.role, CASE WHEN u.avatar_asset_id IS NOT NULL THEN '/api/assets/' || u.avatar_asset_id::text ELSE NULL END AS "avatarUrl",
   w.id AS "workspaceId", u.blocked_at AS "blockedAt", u.created_at AS "createdAt", w.last_seen_at AS "lastSeenAt",
@@ -22,7 +24,15 @@ const boardColumns = `b.id, b.title, b.revision, b.created_at AS "createdAt", b.
 @Injectable()
 export class AdminService {
   private readonly logger = new Logger(AdminService.name);
-  constructor(private readonly db: DatabaseService, private readonly storage: StorageService, private readonly assets: AssetsService) {}
+  constructor(private readonly db: DatabaseService, private readonly storage: StorageService, private readonly assets: AssetsService, private readonly files: SiteFilesService) {}
+
+  async updateSiteFile(actor: AuthContext, value: string, dto: UpdateSiteFileDto) {
+    const name = this.files.name(value);
+    return this.db.transaction(async (client) => {
+      await this.audit(client, actor, 'site_file_updated', null, { name, bytes: Buffer.byteLength(dto.content, 'utf8') });
+      return this.files.update(name, dto);
+    });
+  }
 
   private async audit(client: PoolClient, actor: AuthContext, action: string, targetId: string | null, details: object = {}) {
     await client.query('INSERT INTO admin_audit (actor_id, action, target_id, details) VALUES ($1, $2, $3, $4::jsonb)', [actor.userId, action, targetId, JSON.stringify(details)]);

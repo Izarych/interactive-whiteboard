@@ -1,4 +1,4 @@
-import type { ActiveSession, Board, BoardSummary, DesktopRelease, EmailChallenge, ImageAsset, RegisterAccount, SessionInfo, UpdateBoard, UserProfile } from '@whiteboard/shared';
+import type { ActiveSession, Board, BoardSummary, DesktopRelease, EmailChallenge, ImageAsset, RegisterAccount, SessionInfo, ToolShortcuts, UpdateBoard, UserProfile } from '@whiteboard/shared';
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
@@ -26,6 +26,8 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
 }
 
 export const api = {
+  toolShortcuts: () => request<{ shortcuts: ToolShortcuts }>('/preferences/tools'),
+  saveToolShortcuts: (shortcuts: ToolShortcuts) => request<{ shortcuts: ToolShortcuts }>('/preferences/tools', { method: 'PUT', body: JSON.stringify({ shortcuts }) }),
   desktopRelease: () => request<{ release: DesktopRelease | null }>('/desktop/latest').then((result) => result.release),
   list: () => request<BoardSummary[]>('/boards'),
   create: (title: string) => request<Board>('/boards', { method: 'POST', body: JSON.stringify({ title }) }),

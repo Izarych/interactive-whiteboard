@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import type { ActiveSession, Board, BoardSummary, SessionInfo } from '@whiteboard/shared';
+import type { ActiveSession, Board, BoardSummary, SessionInfo, ToolShortcuts } from '@whiteboard/shared';
 import { api, errorMessage } from './api';
 import type { EditorHandle } from './BoardEditor';
 import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
@@ -28,6 +28,23 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
   const editorRef = useRef<EditorHandle | null>(null);
   const operation = useRef<Promise<void> | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(sidebarDefault);
+  const [toolShortcuts, setToolShortcuts] = useState<ToolShortcuts>({});
+  const [shortcutsReady, setShortcutsReady] = useState(false);
+  const [shortcutsError, setShortcutsError] = useState('');
+  const shortcutsGeneration = useRef(0);
+  const loadShortcuts = useCallback(async () => {
+    const generation = ++shortcutsGeneration.current;
+    setShortcutsReady(false); setShortcutsError('');
+    try {
+      const result = await api.toolShortcuts();
+      if (generation === shortcutsGeneration.current) { setToolShortcuts(result.shortcuts); setShortcutsReady(true); }
+    } catch (reason) { if (generation === shortcutsGeneration.current) setShortcutsError(errorMessage(reason)); }
+  }, []);
+  useEffect(() => { void loadShortcuts(); return () => { shortcutsGeneration.current++; }; }, [loadShortcuts]);
+  const saveShortcuts = async (shortcuts: ToolShortcuts) => {
+    const result = await api.saveToolShortcuts(shortcuts);
+    setToolShortcuts(result.shortcuts);
+  };
   const toggleSidebar = () => {
     setSidebarCollapsed((previous) => {
       const next = !previous;
@@ -187,6 +204,7 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
         {error && <div className="error-banner" role="alert"><span>{error}</span><button disabled={busy} onClick={reloadList}>Обновить список</button></div>}
         {active ? <Suspense fallback={<div className="loading-overlay">Загрузка холста…</div>}>
           <BoardEditor key={active.id} initial={active} onSaved={onSaved} onCopy={copy} editorRef={editorRef} disabled={busy || blocked}
+            toolShortcuts={toolShortcuts} shortcutsReady={shortcutsReady} shortcutsError={shortcutsError} onReloadShortcuts={() => { void loadShortcuts(); }} onSaveShortcuts={saveShortcuts}
             sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} onNewBoard={create} /></Suspense> :
           <section className="empty-state"><button className="empty-sidebar-toggle editor-icon-button" aria-label={sidebarCollapsed ? 'Показать боковую панель' : 'Свернуть боковую панель'} aria-expanded={!sidebarCollapsed} aria-controls="boards-sidebar" onClick={toggleSidebar}>{sidebarCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}</button>
             <img className="empty-icon" src="/favicon.svg" alt="" aria-hidden="true" /><h1>Место для вашей следующей идеи</h1>
