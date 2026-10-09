@@ -25,3 +25,7 @@ export class UpdateToolShortcutsDto {
   @IsDefined() @IsObject() @ValidateNested() @Type(() => ToolShortcutsDto)
   shortcuts: ToolShortcutsDto;
 }
+
+export class UpdateToolPanelDto {
+  @IsBoolean() pinned: boolean;
+}

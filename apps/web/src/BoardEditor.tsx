@@ -14,6 +14,8 @@ import type { ShapeModifier } from './drawing-settings';
 import { ToolShortcutEditor } from './ToolShortcutEditor';
 import { shortcutLabel, shortcutMatches } from './tool-shortcuts';
 import { ColorPalette, drawingColors, ToolSettings } from './ToolSettings';
+import { ToolPanelPinControl } from './ToolPanelPinControl';
+import type { ToolPanelPinState } from './ToolPanelPinControl';
 import { Circle, Download, Eraser, Grid2X2, Hand, Highlighter, ImagePlus, Keyboard, MoreHorizontal, MousePointer2, Palette, PanelLeftClose, PanelLeftOpen, Pencil, Plus, RectangleHorizontal, Redo2, Trash2, Undo2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -33,7 +35,7 @@ const tools: { id: Tool; label: string; icon: LucideIcon }[] = [
 ];
 const colors = drawingColors;
 
-export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sidebarCollapsed, onToggleSidebar, onNewBoard, toolShortcuts, shortcutsReady, shortcutsError, onReloadShortcuts, onSaveShortcuts }: {
+export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sidebarCollapsed, onToggleSidebar, onNewBoard, toolShortcuts, shortcutsReady, shortcutsError, onReloadShortcuts, onSaveShortcuts, panelPin }: {
   initial: Board; onSaved: (board: Board) => void; onCopy: () => void;
   editorRef: React.RefObject<EditorHandle | null>;
   disabled: boolean;
@@ -45,6 +47,7 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
   shortcutsError: string;
   onReloadShortcuts: () => void;
   onSaveShortcuts: (shortcuts: ToolShortcuts) => Promise<void>;
+  panelPin: ToolPanelPinState;
 }) {
   const { board, edit, flush, status, error, draftWarning, snapshot } = useBoard(initial, onSaved);
   const [tool, setTool] = useState<Tool>('pen');
@@ -67,36 +70,39 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [panel, setPanel] = useState<'tool' | 'pen' | 'background' | 'board' | 'shortcut' | null>(null);
+  const activePanel = panel ?? (panelPin.pinned ? 'tool' : null);
   const [shortcutTool, setShortcutTool] = useState<Tool>('pen');
   const previousTool = useRef<Tool>('pen');
   const editorRoot = useRef<HTMLElement>(null);
   const selectTool = (next: Tool, settings = false) => {
     canvasRef.current?.finish();
     if (next !== tool) previousTool.current = tool;
-    setTool(next); setPanel(settings ? 'tool' : null);
+    setTool(next); setPanel(settings || panelPin.pinned ? 'tool' : null);
   };
   const setModifier = (value: ShapeModifier) => { setShapeModifier(value); saveShapeModifier(value); };
   const background = board.document.background ?? DEFAULT_BACKGROUND;
   const saveText = uploading ? 'Загрузка изображения…' : status === 'saved' ? 'Сохранено' : status === 'saving' ? 'Сохранение…' : status === 'pending' ? 'Есть изменения' : 'Не сохранено';
   const togglePanel = (next: NonNullable<typeof panel>) => setPanel((previous) => previous === next ? null : next);
   useEffect(() => {
-    if (!panel) return;
+    if (!activePanel) return;
     const closeOutside = (event: PointerEvent) => {
-      const root = editorRoot.current?.querySelector(`[data-editor-panel="${panel}"]`);
+      const root = editorRoot.current?.querySelector(`[data-editor-panel="${activePanel}"]`);
       if (event.target instanceof Node && !root?.contains(event.target)) {
         if (document.activeElement instanceof HTMLElement && root?.contains(document.activeElement)) document.activeElement.blur();
+        if (panelPin.pinned && (activePanel === 'tool' || activePanel === 'pen')) return;
         setPanel(null);
       }
     };
     const escape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      editorRoot.current?.querySelector<HTMLButtonElement>(`[data-editor-panel="${panel}"] > button[aria-controls]`)?.focus();
+      editorRoot.current?.querySelector<HTMLButtonElement>(`[data-editor-panel="${activePanel}"] > button[aria-controls]`)?.focus();
+      if (panelPin.pinned && (activePanel === 'tool' || activePanel === 'pen')) return;
       setPanel(null);
     };
     document.addEventListener('pointerdown', closeOutside);
     window.addEventListener('keydown', escape);
     return () => { document.removeEventListener('pointerdown', closeOutside); window.removeEventListener('keydown', escape); };
-  }, [panel]);
+  }, [activePanel, panelPin.pinned]);
   useImperativeHandle(editorRef, () => ({ flush: async (forUpdate) => {
     canvasRef.current?.finish();
     while (pendingUploads.current) await uploads.current;
@@ -270,11 +276,11 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
           </div>
         </header>
         <div className="tool-dock" role="toolbar" aria-label="Инструменты рисования">
-          {tools.map((item) => <div key={item.id} className="editor-popover-anchor" data-editor-panel={tool === item.id && panel === 'tool' ? 'tool' : undefined}>
-            <button title={`${item.label}${toolShortcuts[item.id] ? ` (${shortcutLabel(toolShortcuts[item.id])})` : ''} · Клик — настройки · Правой кнопкой — хоткей`} aria-label={item.label} aria-pressed={tool === item.id} aria-expanded={tool === item.id && panel === 'tool'} aria-controls={`tool-settings-${item.id}`} className={`editor-icon-button ${tool === item.id ? 'active' : ''}`} onClick={() => selectTool(item.id, true)} onContextMenu={(event) => {
+          {tools.map((item) => <div key={item.id} className="editor-popover-anchor" data-editor-panel={tool === item.id && activePanel === 'tool' ? 'tool' : undefined}>
+            <button title={`${item.label}${toolShortcuts[item.id] ? ` (${shortcutLabel(toolShortcuts[item.id])})` : ''} · Клик — настройки · Правой кнопкой — хоткей`} aria-label={item.label} aria-pressed={tool === item.id} aria-expanded={tool === item.id && activePanel === 'tool'} aria-controls={`tool-settings-${item.id}`} className={`editor-icon-button ${tool === item.id ? 'active' : ''}`} onClick={() => selectTool(item.id, true)} onContextMenu={(event) => {
             event.preventDefault(); setShortcutTool(item.id); setPanel('shortcut');
           }}><item.icon size={19} strokeWidth={1.8} /></button>
-            {tool === item.id && panel === 'tool' && <ToolSettings tool={tool} label={item.label} color={tool === 'highlighter' ? highlighterColor : color} width={tool === 'highlighter' ? highlighterWidth : width} opacity={highlighterOpacity} eraserWidth={eraserWidth} modifier={shapeModifier}
+            {tool === item.id && activePanel === 'tool' && <ToolSettings tool={tool} label={item.label} color={tool === 'highlighter' ? highlighterColor : color} width={tool === 'highlighter' ? highlighterWidth : width} opacity={highlighterOpacity} eraserWidth={eraserWidth} modifier={shapeModifier} panelPin={panelPin}
               selectedImage={board.document.elements.find((element): element is ImageElement => element.kind === 'image' && element.id === selectedImageId) ?? null}
               onColor={tool === 'highlighter' ? setHighlighterColor : setColor} onWidth={tool === 'highlighter' ? setHighlighterWidth : setWidth} onOpacity={setHighlighterOpacity} onEraserWidth={setEraserWidth} onModifier={setModifier}
               onShortcut={() => { setShortcutTool(tool); setPanel('shortcut'); }} onDeleteImage={deleteSelected}
@@ -296,6 +302,7 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
                 setModifier(event.target.value as ShapeModifier);
               }}>{shapeModifiers.map((modifier) => <option key={modifier.value} value={modifier.value}>{modifier.label}</option>)}</select></label>
               <p className="drawing-settings-note">Нажмите модификатор во время штриха: выравнивание сохраняется до его завершения.</p>
+              <ToolPanelPinControl settings={panelPin} />
             </section>}
           </div>
           <button className="editor-icon-button" aria-label="Добавить изображение" title="Добавить изображение (или Ctrl+V)" onClick={() => { setPanel(null); fileInputRef.current?.click(); }}><ImagePlus size={19} /></button>

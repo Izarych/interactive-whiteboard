@@ -3,12 +3,24 @@ import type { ToolShortcuts } from '@whiteboard/shared';
 import { AuthGuard } from './auth/auth.guard';
 import type { AuthenticatedRequest } from './auth/auth.types';
 import { DatabaseService } from './database.service';
-import { UpdateToolShortcutsDto } from './tool-shortcuts.dto';
+import { UpdateToolPanelDto, UpdateToolShortcutsDto } from './tool-shortcuts.dto';
 
 @Controller('preferences/tools')
 @UseGuards(AuthGuard)
 export class ToolShortcutsController {
   constructor(private readonly db: DatabaseService) {}
+
+  @Get('panel')
+  async panel(@Req() request: AuthenticatedRequest): Promise<{ pinned: boolean }> {
+    const result = await this.db.pool.query('SELECT tool_panel_pinned FROM workspace_owners WHERE id=$1', [request.auth.workspaceId]);
+    return { pinned: result.rows[0].tool_panel_pinned === true };
+  }
+
+  @Put('panel')
+  async updatePanel(@Req() request: AuthenticatedRequest, @Body() dto: UpdateToolPanelDto): Promise<{ pinned: boolean }> {
+    const result = await this.db.pool.query('UPDATE workspace_owners SET tool_panel_pinned=$2 WHERE id=$1 RETURNING tool_panel_pinned', [request.auth.workspaceId, dto.pinned]);
+    return { pinned: result.rows[0].tool_panel_pinned };
+  }
 
   @Get()
   async get(@Req() request: AuthenticatedRequest): Promise<{ shortcuts: ToolShortcuts }> {

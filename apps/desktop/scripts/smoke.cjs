@@ -55,6 +55,7 @@ async function main() {
   const now = new Date().toISOString();
   let board = { id: 'native-smoke', title: 'Native smoke', revision: 1, createdAt: now, updatedAt: now, document: { version: 1, elements: [] } };
   let shortcuts = {};
+  let panelPinned = false;
   let saved = false;
   const saveGate = new Promise((resolve) => { releaseSave = resolve; });
   child = launch();
@@ -73,6 +74,10 @@ async function main() {
     if (pathname === '/api/preferences/tools') {
       if (route.request().method() === 'PUT') shortcuts = route.request().postDataJSON().shortcuts;
       return json({ shortcuts });
+    }
+    if (pathname === '/api/preferences/tools/panel') {
+      if (route.request().method() === 'PUT') panelPinned = route.request().postDataJSON().pinned;
+      return json({ pinned: panelPinned });
     }
     if (pathname === '/api/desktop/latest') return json({ release: { version, downloadUrl: `https://github.com/Izarych/interactive-whiteboard/releases/download/desktop-v${version}/BluviBoard-Setup-${version}-x64.exe`, releaseUrl: `https://github.com/Izarych/interactive-whiteboard/releases/tag/desktop-v${version}` } });
     if (pathname === '/api/boards') return json([board]);

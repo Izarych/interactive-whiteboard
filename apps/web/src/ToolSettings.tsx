@@ -1,6 +1,8 @@
 import type { DrawingTool, ImageElement } from '@whiteboard/shared';
 import { shapeModifiers } from './drawing-settings';
 import type { ShapeModifier } from './drawing-settings';
+import { ToolPanelPinControl } from './ToolPanelPinControl';
+import type { ToolPanelPinState } from './ToolPanelPinControl';
 
 export const drawingColors = ['#202938', '#64748b', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6'];
 export function ColorPalette({ color, onChange }: { color: string; onChange: (value: string) => void }) {
@@ -9,8 +11,9 @@ export function ColorPalette({ color, onChange }: { color: string; onChange: (va
   </div>;
 }
 
-export function ToolSettings({ tool, label, color, width, opacity, eraserWidth, modifier, selectedImage, onColor, onWidth, onOpacity, onEraserWidth, onModifier, onShortcut, onDeleteImage, onZoomIn, onZoomOut, onResetView }: {
+export function ToolSettings({ tool, label, color, width, opacity, eraserWidth, modifier, selectedImage, panelPin, onColor, onWidth, onOpacity, onEraserWidth, onModifier, onShortcut, onDeleteImage, onZoomIn, onZoomOut, onResetView }: {
   tool: DrawingTool; label: string; color: string; width: number; opacity: number; eraserWidth: number; modifier: ShapeModifier; selectedImage: ImageElement | null;
+  panelPin: ToolPanelPinState;
   onColor: (value: string) => void; onWidth: (value: number) => void; onOpacity: (value: number) => void; onEraserWidth: (value: number) => void;
   onModifier: (value: ShapeModifier) => void; onShortcut: () => void; onDeleteImage: () => void; onZoomIn: () => void; onZoomOut: () => void; onResetView: () => void;
 }) {
@@ -41,6 +44,7 @@ export function ToolSettings({ tool, label, color, width, opacity, eraserWidth, 
       <p className="drawing-settings-note">Перетаскивайте холст. Колёсико изменяет масштаб.</p>
       <div className="tool-view-controls"><button className="text-button" aria-label="Уменьшить масштаб в настройках" onClick={onZoomOut}>−</button><button className="text-button" onClick={onResetView}>Сбросить вид</button><button className="text-button" aria-label="Увеличить масштаб в настройках" onClick={onZoomIn}>+</button></div>
     </>}
+    <ToolPanelPinControl settings={panelPin} />
     <button className="tool-shortcut-link text-button" onClick={onShortcut}>Настроить хоткей</button>
   </section>;
 }

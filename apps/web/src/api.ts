@@ -27,6 +27,8 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
 
 export const api = {
   toolShortcuts: () => request<{ shortcuts: ToolShortcuts }>('/preferences/tools'),
+  toolPanel: () => request<{ pinned: boolean }>('/preferences/tools/panel'),
+  saveToolPanel: (pinned: boolean) => request<{ pinned: boolean }>('/preferences/tools/panel', { method: 'PUT', body: JSON.stringify({ pinned }) }),
   saveToolShortcuts: (shortcuts: ToolShortcuts) => request<{ shortcuts: ToolShortcuts }>('/preferences/tools', { method: 'PUT', body: JSON.stringify({ shortcuts }) }),
   desktopRelease: () => request<{ release: DesktopRelease | null }>('/desktop/latest').then((result) => result.release),
   list: () => request<BoardSummary[]>('/boards'),

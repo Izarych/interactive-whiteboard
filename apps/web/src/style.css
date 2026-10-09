@@ -202,6 +202,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .tool-settings--left { left: 0; right: auto; }
 .tool-shortcut-link { margin-top: 14px; width: 100%; text-align: left; border-top: 1px solid #edf0f6; border-radius: 0; }
 .tool-view-controls { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+.tool-panel-pin { margin-top: 16px; padding-top: 12px; border-top: 1px solid #edf0f6; }
+.tool-panel-pin > label { display: flex; align-items: center; gap: 8px; color: #747b8d; font-size: 11px; cursor: pointer; }
+.tool-panel-pin input { width: 16px; height: 16px; margin: 0; accent-color: #6366f1; }
+.tool-panel-pin > small { display: block; margin: 6px 0 0 24px; color: #9298a6; font-size: 10px; }
 .board-actions { width: 226px; padding: 7px; }
 .board-actions > button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px; border-radius: 8px; text-align: left; color: #707889; font-size: 12px; }
 .board-actions > button:hover:not(:disabled) { background: #f4f5fa; }

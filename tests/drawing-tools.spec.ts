@@ -14,6 +14,7 @@ async function board(context: BrowserContext, elements: object[] = []) {
 }
 
 async function trace(page: Page, points: [number, number][], modifier?: string, beforeRelease?: () => Promise<void>) {
+  await page.keyboard.press('Escape');
   const box = (await page.getByTestId('canvas').boundingBox())!;
   if (modifier) await page.keyboard.down(modifier);
   await page.mouse.move(box.x + points[0][0], box.y + points[0][1]);

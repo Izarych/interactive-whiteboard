@@ -9,6 +9,7 @@ test.afterEach(cleanupWorkerFixtures);
 const webKey = 'bluviboard:release-seen';
 const nativeKey = 'bluviboard:desktop-release-seen';
 const pendingKey = 'bluviboard:release-after-update';
+const historyTitles = [`BluviBoard ${appVersion}`, 'BluviBoard 1.3.1', 'BluviBoard 1.3.0'];
 
 test('a newer browser version shows bundled notes, remembers dismissal, and allows reopening on mobile', async ({ page }) => {
   await page.goto('/');
@@ -17,7 +18,8 @@ test('a newer browser version shows bundled notes, remembers dismissal, and allo
   const dialog = page.getByRole('dialog', { name: 'Что нового', exact: true });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('heading', { name: `BluviBoard ${appVersion}`, exact: true })).toBeVisible();
-  await expect(dialog.locator('article > h3')).toHaveText([`BluviBoard ${appVersion}`, 'BluviBoard 1.3.0', 'BluviBoard 1.2.0']);
+  await expect(dialog.locator('article > h3')).toHaveText(historyTitles);
+  await expect(dialog).not.toContainText('Последние три версии BluviBoard — от новой к старым');
   await expect(dialog).not.toContainText('BluviBoard 1.1.1');
   await expect(dialog).toContainText('Полупрозрачный маркер');
   await expect(page.locator('.pwa-app')).toHaveAttribute('inert', '');
@@ -33,7 +35,7 @@ test('a newer browser version shows bundled notes, remembers dismissal, and allo
   await expect(dialog).toHaveCount(0);
   await page.getByRole('button', { name: 'Что нового', exact: true }).click();
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator('article > h3')).toHaveText([`BluviBoard ${appVersion}`, 'BluviBoard 1.3.0', 'BluviBoard 1.2.0']);
+  await expect(dialog.locator('article > h3')).toHaveText(historyTitles);
   await page.setViewportSize({ width: 360, height: 800 });
   const bounds = (await dialog.boundingBox())!;
   expect(bounds.x).toBeGreaterThanOrEqual(0);
@@ -45,7 +47,7 @@ test('a newer browser version shows bundled notes, remembers dismissal, and allo
   await history.focus();
   await page.keyboard.press('Control+End');
   await expect.poll(() => history.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
-  await expect(dialog).toContainText('Настраиваемые хоткеи');
+  await expect(dialog).toContainText('Плавность штрихов');
   await page.screenshot({ path: 'test-results/release-notes-mobile.png', fullPage: true });
   await dialog.getByRole('button', { name: 'Понятно', exact: true }).click();
   await expect(dialog).toHaveCount(0);
@@ -85,7 +87,7 @@ test('Windows shell upgrades show notes for the installed shell independently of
   await page.reload();
   const dialog = page.getByRole('dialog', { name: 'Что нового', exact: true });
   await expect(dialog.getByRole('heading', { name: `BluviBoard для Windows ${nativeVersion}`, exact: true })).toBeVisible();
-  await expect(dialog.locator('article > h3')).toHaveText([`BluviBoard ${appVersion}`, 'BluviBoard 1.3.0', 'BluviBoard 1.2.0', `BluviBoard для Windows ${nativeVersion}`, 'BluviBoard для Windows 0.1.0']);
+  await expect(dialog.locator('article > h3')).toHaveText([...historyTitles, `BluviBoard для Windows ${nativeVersion}`, 'BluviBoard для Windows 0.1.0']);
   await expect(dialog).toContainText('Автоматическая проверка Windows-обновлений');
   await dialog.getByRole('button', { name: 'Понятно', exact: true }).click();
   expect(await page.evaluate((key) => localStorage.getItem(key), nativeKey)).toBe(nativeVersion);
@@ -128,7 +130,7 @@ test('notes remain readable without the API and dismissal falls back to session 
     const dialog = page.getByRole('dialog', { name: 'Что нового', exact: true });
     await expect(dialog).toContainText(`BluviBoard ${appVersion}`);
     await expect(dialog).toContainText('Полупрозрачный маркер');
-    await expect(dialog.locator('article > h3')).toHaveText([`BluviBoard ${appVersion}`, 'BluviBoard 1.3.0', 'BluviBoard 1.2.0']);
+    await expect(dialog.locator('article > h3')).toHaveText(historyTitles);
     await dialog.getByRole('button', { name: 'Понятно', exact: true }).click();
     expect(await page.evaluate((key) => sessionStorage.getItem(key), webKey)).toBe(appVersion);
     await page.reload();

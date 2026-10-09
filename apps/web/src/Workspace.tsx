@@ -31,6 +31,37 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
   const [toolShortcuts, setToolShortcuts] = useState<ToolShortcuts>({});
   const [shortcutsReady, setShortcutsReady] = useState(false);
   const [shortcutsError, setShortcutsError] = useState('');
+  const [panelPinned, setPanelPinned] = useState(false);
+  const [panelReady, setPanelReady] = useState(false);
+  const [panelSaving, setPanelSaving] = useState(false);
+  const [panelError, setPanelError] = useState('');
+  const panelGeneration = useRef(0);
+  const panelOperation = useRef<Promise<void> | null>(null);
+  const loadPanel = useCallback(async () => {
+    const generation = ++panelGeneration.current;
+    setPanelReady(false); setPanelError('');
+    try {
+      const result = await api.toolPanel();
+      if (generation === panelGeneration.current) { setPanelPinned(result.pinned); setPanelReady(true); }
+    } catch (reason) { if (generation === panelGeneration.current) setPanelError(errorMessage(reason)); }
+  }, []);
+  useEffect(() => { void loadPanel(); return () => { panelGeneration.current++; }; }, [loadPanel]);
+  const savePanel = (pinned: boolean): Promise<void> => {
+    if (panelOperation.current) return panelOperation.current;
+    const generation = panelGeneration.current;
+    const previous = panelPinned;
+    setPanelPinned(pinned);
+    setPanelSaving(true); setPanelError('');
+    const operation = (async () => {
+      try {
+        const result = await api.saveToolPanel(pinned);
+        if (generation === panelGeneration.current) setPanelPinned(result.pinned);
+      } catch (reason) { if (generation === panelGeneration.current) { setPanelPinned(previous); setPanelError(errorMessage(reason)); } }
+      finally { if (generation === panelGeneration.current) setPanelSaving(false); panelOperation.current = null; }
+    })();
+    panelOperation.current = operation;
+    return operation;
+  };
   const shortcutsGeneration = useRef(0);
   const loadShortcuts = useCallback(async () => {
     const generation = ++shortcutsGeneration.current;
@@ -82,6 +113,7 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
   }, []);
 
   useEffect(() => registerUpdateGuard(async () => {
+    await panelOperation.current;
     await operation.current;
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     await editorRef.current?.flush(true);
@@ -157,10 +189,12 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
   });
 
   const openAccount = (mode?: 'login' | 'register') => run(async () => {
+    await panelOperation.current;
     await editorRef.current?.flush();
     if (mode) onAuth(mode); else onProfile();
   });
   const logout = () => run(async () => {
+    await panelOperation.current;
     await editorRef.current?.flush();
     await api.logout();
     onSession(await api.session());
@@ -204,6 +238,7 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
         {error && <div className="error-banner" role="alert"><span>{error}</span><button disabled={busy} onClick={reloadList}>Обновить список</button></div>}
         {active ? <Suspense fallback={<div className="loading-overlay">Загрузка холста…</div>}>
           <BoardEditor key={active.id} initial={active} onSaved={onSaved} onCopy={copy} editorRef={editorRef} disabled={busy || blocked}
+            panelPin={{ pinned: panelPinned, ready: panelReady, saving: panelSaving, error: panelError, setPinned: savePanel, reload: () => { void loadPanel(); } }}
             toolShortcuts={toolShortcuts} shortcutsReady={shortcutsReady} shortcutsError={shortcutsError} onReloadShortcuts={() => { void loadShortcuts(); }} onSaveShortcuts={saveShortcuts}
             sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} onNewBoard={create} /></Suspense> :
           <section className="empty-state"><button className="empty-sidebar-toggle editor-icon-button" aria-label={sidebarCollapsed ? 'Показать боковую панель' : 'Свернуть боковую панель'} aria-expanded={!sidebarCollapsed} aria-controls="boards-sidebar" onClick={toggleSidebar}>{sidebarCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}</button>

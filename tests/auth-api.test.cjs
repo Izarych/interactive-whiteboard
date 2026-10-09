@@ -95,6 +95,7 @@ test('auth: guest ownership, registration, mail codes, profile, login merging an
       assert.notEqual(guestA.workspaceId, guestB.workspaceId);
       assert.deepEqual(await call(a, 'GET', '/preferences/tools', undefined, 200), { shortcuts: {} });
       await call(a, 'PUT', '/preferences/tools', { shortcuts: eraserShortcuts }, 200);
+      await call(a, 'PUT', '/preferences/tools/panel', { pinned: true }, 200);
     });
 
     await t.test('guests cannot see, edit, delete or embed each other’s boards and images', async () => {
@@ -132,6 +133,7 @@ test('auth: guest ownership, registration, mail codes, profile, login merging an
       assert.equal(user.user.avatarUrl, avatar.url);
       assert.equal(user.workspaceId, guestA.workspaceId);
       assert.deepEqual(await call(a, 'GET', '/preferences/tools', undefined, 200), { shortcuts: eraserShortcuts });
+      assert.deepEqual(await call(a, 'GET', '/preferences/tools/panel', undefined, 200), { pinned: true });
       assert.notEqual(a.cookie, oldCookie);
       assert.equal((await fetch(`${base}/boards`, { headers: { Cookie: oldCookie } })).status, 401);
       assert.deepEqual((await call(a, 'GET', `/boards/${board.id}`, undefined, 200)).document, document);
@@ -158,6 +160,7 @@ test('auth: guest ownership, registration, mail codes, profile, login merging an
     await t.test('login merges a new guest workspace into the existing user and keeps both sets of images', async () => {
       const guest = await call(c, 'POST', '/auth/guest', undefined, 200);
       await call(c, 'PUT', '/preferences/tools', { shortcuts: handShortcuts }, 200);
+      await call(c, 'PUT', '/preferences/tools/panel', { pinned: false }, 200);
       const extra = await call(c, 'POST', '/boards', { title: 'Second guest drawing' }, 201);
       const extraAsset = await upload(c, png);
       const oldCookie = c.cookie;
@@ -165,6 +168,7 @@ test('auth: guest ownership, registration, mail codes, profile, login merging an
       assert.equal(loggedIn.workspaceId, guestA.workspaceId);
       assert.notEqual(loggedIn.workspaceId, guest.workspaceId);
       assert.deepEqual(await call(c, 'GET', '/preferences/tools', undefined, 200), { shortcuts: eraserShortcuts });
+      assert.deepEqual(await call(c, 'GET', '/preferences/tools/panel', undefined, 200), { pinned: true });
       const list = await call(c, 'GET', '/boards', undefined, 200);
       assert.ok(list.some((item) => item.id === board.id));
       assert.ok(list.some((item) => item.id === extra.id));
@@ -178,8 +182,16 @@ test('auth: guest ownership, registration, mail codes, profile, login merging an
       const preferenceGuest = createApiClient(base);
       await call(preferenceGuest, 'POST', '/auth/guest', undefined, 200);
       await call(preferenceGuest, 'PUT', '/preferences/tools', { shortcuts: handShortcuts }, 200);
+      await call(preferenceGuest, 'PUT', '/preferences/tools/panel', { pinned: true }, 200);
       await call(preferenceGuest, 'POST', '/auth/login', { email: secondEmail, password }, 200);
       assert.deepEqual(await call(preferenceGuest, 'GET', '/preferences/tools', undefined, 200), { shortcuts: handShortcuts });
+      assert.deepEqual(await call(preferenceGuest, 'GET', '/preferences/tools/panel', undefined, 200), { pinned: true });
+      await call(preferenceGuest, 'PUT', '/preferences/tools/panel', { pinned: false }, 200);
+      const anotherGuest = createApiClient(base);
+      await call(anotherGuest, 'POST', '/auth/guest', undefined, 200);
+      await call(anotherGuest, 'PUT', '/preferences/tools/panel', { pinned: true }, 200);
+      await call(anotherGuest, 'POST', '/auth/login', { email: secondEmail, password }, 200);
+      assert.deepEqual(await call(anotherGuest, 'GET', '/preferences/tools/panel', undefined, 200), { pinned: false });
     });
 
     await t.test('enforce code attempt/expiry limits, resend with a new code and bind confirmation to the guest', async () => {
