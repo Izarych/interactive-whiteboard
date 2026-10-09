@@ -45,6 +45,8 @@ test('CapsLock is opt-in, toggles back, ignores key repeat and text input, and p
     await expect(pen).toHaveAttribute('aria-pressed', 'true');
     await pen.click();
     await page.getByRole('button', { name: '+ Новая доска', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Название доски', exact: true })).toHaveValue('Новая доска');
+    await expect(page.locator('.workspace--busy')).toHaveCount(0);
     await expect(page.getByText('0 объектов', { exact: true })).toBeVisible();
     await page.keyboard.press('CapsLock');
     await expect(eraser).toHaveAttribute('aria-pressed', 'true');
