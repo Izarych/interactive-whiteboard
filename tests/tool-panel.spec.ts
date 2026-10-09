@@ -25,6 +25,14 @@ test('pinning keeps the current tool settings visible while drawing and follows 
     await pen.click();
     const pin = page.getByRole('checkbox', { name: 'Всегда показывать настройки', exact: true });
     await expect(pin).toBeEnabled();
+    await expect(page.getByRole('toolbar', { name: 'Инструменты рисования' }).getByRole('checkbox', { name: 'Всегда показывать настройки' })).toHaveCount(1);
+    const settingsBeforePin = page.getByRole('dialog', { name: 'Настройки: Карандаш', exact: true });
+    await expect(settingsBeforePin.getByRole('checkbox')).toHaveCount(0);
+    await expect(settingsBeforePin).not.toContainText('Нажмите модификатор');
+    await expect(settingsBeforePin).not.toContainText('Для всех ваших досок');
+    await expect(settingsBeforePin.getByRole('button', { name: 'Настроить хоткей', exact: true })).toHaveCount(0);
+    expect((await pin.boundingBox())!.x).toBeLessThan((await pen.boundingBox())!.x);
+    expect((await settingsBeforePin.boundingBox())!.height).toBeLessThan(200);
     await expect(pin).not.toBeChecked();
     await pin.click();
     await expect(pin).toBeEnabled();
@@ -66,6 +74,7 @@ test('pinning keeps the current tool settings visible while drawing and follows 
     const box = (await settings.boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(360);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(360);
     await page.screenshot({ path: 'test-results/pinned-tool-panel-mobile.png', fullPage: true });
     await pin.click();
     await expect.poll(async () => (await (await context.request.get('/api/preferences/tools/panel')).json()).pinned).toBe(false);

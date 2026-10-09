@@ -276,14 +276,15 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
           </div>
         </header>
         <div className="tool-dock" role="toolbar" aria-label="Инструменты рисования">
+          <ToolPanelPinControl settings={panelPin} />
           {tools.map((item) => <div key={item.id} className="editor-popover-anchor" data-editor-panel={tool === item.id && activePanel === 'tool' ? 'tool' : undefined}>
             <button title={`${item.label}${toolShortcuts[item.id] ? ` (${shortcutLabel(toolShortcuts[item.id])})` : ''} · Клик — настройки · Правой кнопкой — хоткей`} aria-label={item.label} aria-pressed={tool === item.id} aria-expanded={tool === item.id && activePanel === 'tool'} aria-controls={`tool-settings-${item.id}`} className={`editor-icon-button ${tool === item.id ? 'active' : ''}`} onClick={() => selectTool(item.id, true)} onContextMenu={(event) => {
             event.preventDefault(); setShortcutTool(item.id); setPanel('shortcut');
           }}><item.icon size={19} strokeWidth={1.8} /></button>
-            {tool === item.id && activePanel === 'tool' && <ToolSettings tool={tool} label={item.label} color={tool === 'highlighter' ? highlighterColor : color} width={tool === 'highlighter' ? highlighterWidth : width} opacity={highlighterOpacity} eraserWidth={eraserWidth} modifier={shapeModifier} panelPin={panelPin}
+            {tool === item.id && activePanel === 'tool' && <ToolSettings tool={tool} label={item.label} color={tool === 'highlighter' ? highlighterColor : color} width={tool === 'highlighter' ? highlighterWidth : width} opacity={highlighterOpacity} eraserWidth={eraserWidth} modifier={shapeModifier}
               selectedImage={board.document.elements.find((element): element is ImageElement => element.kind === 'image' && element.id === selectedImageId) ?? null}
               onColor={tool === 'highlighter' ? setHighlighterColor : setColor} onWidth={tool === 'highlighter' ? setHighlighterWidth : setWidth} onOpacity={setHighlighterOpacity} onEraserWidth={setEraserWidth} onModifier={setModifier}
-              onShortcut={() => { setShortcutTool(tool); setPanel('shortcut'); }} onDeleteImage={deleteSelected}
+              onDeleteImage={deleteSelected}
               onZoomIn={() => canvasRef.current?.zoomIn()} onZoomOut={() => canvasRef.current?.zoomOut()} onResetView={() => canvasRef.current?.resetView()} />}
           </div>)}
           <div className="editor-popover-anchor" data-editor-panel="shortcut">
@@ -301,8 +302,6 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
               <label className="shape-modifier-control">Выравнивание фигур<select aria-label="Хоткей выравнивания фигур" value={shapeModifier} onChange={(event) => {
                 setModifier(event.target.value as ShapeModifier);
               }}>{shapeModifiers.map((modifier) => <option key={modifier.value} value={modifier.value}>{modifier.label}</option>)}</select></label>
-              <p className="drawing-settings-note">Нажмите модификатор во время штриха: выравнивание сохраняется до его завершения.</p>
-              <ToolPanelPinControl settings={panelPin} />
             </section>}
           </div>
           <button className="editor-icon-button" aria-label="Добавить изображение" title="Добавить изображение (или Ctrl+V)" onClick={() => { setPanel(null); fileInputRef.current?.click(); }}><ImagePlus size={19} /></button>
@@ -317,6 +316,7 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
       </div>
       <input ref={fileInputRef} className="image-file-input" type="file" accept="image/png,image/jpeg,image/webp" multiple aria-label="Загрузить изображения" onChange={(event) => { insertImages(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
       <div className="editor-alerts">
+        {panelPin.error && <div className="error-banner" role="alert"><span>{panelPin.error}</span><button disabled={panelPin.saving} onClick={panelPin.reload}>Повторить загрузку настройки</button></div>}
         {(error || draftWarning) && <div className="error-banner" role="alert">
           <span>{error || draftWarning} Рисунок остаётся в этой вкладке{draftWarning ? '.' : ' и в локальной резервной копии.'}</span>
           {error && <><button onClick={() => { void flush().catch(() => {}); }}>Повторить сохранение</button>

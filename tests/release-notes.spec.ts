@@ -9,7 +9,7 @@ test.afterEach(cleanupWorkerFixtures);
 const webKey = 'bluviboard:release-seen';
 const nativeKey = 'bluviboard:desktop-release-seen';
 const pendingKey = 'bluviboard:release-after-update';
-const historyTitles = [`BluviBoard ${appVersion}`, 'BluviBoard 1.3.1', 'BluviBoard 1.3.0'];
+const historyTitles = [`BluviBoard ${appVersion}`, 'BluviBoard 1.3.2', 'BluviBoard 1.3.1'];
 
 test('a newer browser version shows bundled notes, remembers dismissal, and allows reopening on mobile', async ({ page }) => {
   await page.goto('/');
@@ -21,7 +21,7 @@ test('a newer browser version shows bundled notes, remembers dismissal, and allo
   await expect(dialog.locator('article > h3')).toHaveText(historyTitles);
   await expect(dialog).not.toContainText('Последние три версии BluviBoard — от новой к старым');
   await expect(dialog).not.toContainText('BluviBoard 1.1.1');
-  await expect(dialog).toContainText('Полупрозрачный маркер');
+  await expect(dialog).toContainText('Флажок закрепления настроек');
   await expect(page.locator('.pwa-app')).toHaveAttribute('inert', '');
   await page.keyboard.press('Shift+Tab');
   await expect(dialog.getByRole('button', { name: 'Понятно', exact: true })).toBeFocused();
@@ -47,7 +47,7 @@ test('a newer browser version shows bundled notes, remembers dismissal, and allo
   await history.focus();
   await page.keyboard.press('Control+End');
   await expect.poll(() => history.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
-  await expect(dialog).toContainText('Плавность штрихов');
+  await expect(dialog).toContainText('Обновления');
   await page.screenshot({ path: 'test-results/release-notes-mobile.png', fullPage: true });
   await dialog.getByRole('button', { name: 'Понятно', exact: true }).click();
   await expect(dialog).toHaveCount(0);
@@ -129,7 +129,7 @@ test('notes remain readable without the API and dismissal falls back to session 
     await page.goto('/');
     const dialog = page.getByRole('dialog', { name: 'Что нового', exact: true });
     await expect(dialog).toContainText(`BluviBoard ${appVersion}`);
-    await expect(dialog).toContainText('Полупрозрачный маркер');
+    await expect(dialog).toContainText('Флажок закрепления настроек');
     await expect(dialog.locator('article > h3')).toHaveText(historyTitles);
     await dialog.getByRole('button', { name: 'Понятно', exact: true }).click();
     expect(await page.evaluate((key) => sessionStorage.getItem(key), webKey)).toBe(appVersion);

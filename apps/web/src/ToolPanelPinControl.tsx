@@ -1,3 +1,5 @@
+import { Flag } from 'lucide-react';
+
 export interface ToolPanelPinState {
   pinned: boolean;
   ready: boolean;
@@ -8,9 +10,8 @@ export interface ToolPanelPinState {
 }
 
 export function ToolPanelPinControl({ settings }: { settings: ToolPanelPinState }) {
-  return <div className="tool-panel-pin">
-    <label><input type="checkbox" checked={settings.pinned} disabled={!settings.ready || settings.saving} onChange={(event) => { void settings.setPinned(event.target.checked); }} />Всегда показывать настройки</label>
-    <small>{settings.saving ? 'Сохраняем…' : 'Для всех ваших досок'}</small>
-    {settings.error && <div className="form-error" role="alert">{settings.error}<button className="text-button" disabled={settings.saving} onClick={settings.reload}>Повторить загрузку настройки</button></div>}
-  </div>;
+  return <label className={`editor-icon-button tool-panel-pin ${settings.pinned ? 'active' : ''}`} title={settings.saving ? 'Сохраняем закрепление панели…' : 'Всегда показывать настройки'}>
+    <input type="checkbox" aria-label="Всегда показывать настройки" checked={settings.pinned} disabled={!settings.ready || settings.saving} onChange={(event) => { void settings.setPinned(event.target.checked); }} />
+    <Flag size={18} strokeWidth={1.8} fill={settings.pinned ? 'currentColor' : 'none'} aria-hidden="true" />
+  </label>;
 }

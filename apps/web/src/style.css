@@ -200,12 +200,17 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .editor-popover { position: absolute; top: calc(100% + 13px); right: 0; z-index: 20; width: 284px; max-width: calc(100vw - 32px); padding: 18px; border: 1px solid #e1e4ed; border-radius: 14px; background: #fff; box-shadow: 0 10px 35px #20293814; }
 .editor-popover h2 { margin: 0 0 17px; font-size: 13px; font-weight: 650; }
 .tool-settings--left { left: 0; right: auto; }
-.tool-shortcut-link { margin-top: 14px; width: 100%; text-align: left; border-top: 1px solid #edf0f6; border-radius: 0; }
+.tool-settings, .pen-settings { width: 260px; padding: 12px; }
+.tool-settings h2, .pen-settings h2 { margin-bottom: 12px; }
+.tool-settings .colors, .pen-settings .colors { gap: 6px; }
+.tool-settings .color-button, .pen-settings .color-button { width: 20px; height: 20px; }
+.tool-settings .custom-color, .pen-settings .custom-color { width: 22px; height: 22px; }
+.tool-settings .width-control, .pen-settings .width-control, .tool-settings .shape-modifier-control, .pen-settings .shape-modifier-control { margin-top: 14px; }
 .tool-view-controls { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
-.tool-panel-pin { margin-top: 16px; padding-top: 12px; border-top: 1px solid #edf0f6; }
-.tool-panel-pin > label { display: flex; align-items: center; gap: 8px; color: #747b8d; font-size: 11px; cursor: pointer; }
-.tool-panel-pin input { width: 16px; height: 16px; margin: 0; accent-color: #6366f1; }
-.tool-panel-pin > small { display: block; margin: 6px 0 0 24px; color: #9298a6; font-size: 10px; }
+.tool-panel-pin { cursor: pointer; }
+.tool-panel-pin input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.tool-panel-pin:focus-within { outline: 3px solid #a5b4fc; outline-offset: 3px; }
+.tool-panel-pin:has(input:disabled) { opacity: .4; cursor: default; }
 .board-actions { width: 226px; padding: 7px; }
 .board-actions > button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px; border-radius: 8px; text-align: left; color: #707889; font-size: 12px; }
 .board-actions > button:hover:not(:disabled) { background: #f4f5fa; }
@@ -269,7 +274,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .brand small { font-size: 9px; }
   .canvas-tip { display: none; }
 }
-@container board-workspace (min-width: 1100px) {
+@container board-workspace (min-width: 1200px) {
   .tool-dock { position: absolute; left: 50%; transform: translateX(-50%); margin-left: 0; }
 }
 @container board-workspace (max-width: 850px) {
@@ -287,7 +292,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .editor-chrome { top: 10px; left: 10px; right: 10px; }
   .editor-icon-button { width: 31px; height: 33px; }
   .tool-dock { gap: 2px; }
-  .tool-dock .editor-icon-button { width: 26px; }
+  .tool-dock .editor-icon-button { width: 24px; }
   .editor-divider { margin: 0 3px; }
 }
 @media (max-width: 650px) {
