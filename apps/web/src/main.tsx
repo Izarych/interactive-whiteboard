@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
+import Application from './Application';
 import './style.css';
 import { startPwa } from './pwa';
 import { startDesktop } from './desktop';
@@ -10,6 +10,6 @@ startPwa();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <Application />
   </React.StrictMode>,
 );

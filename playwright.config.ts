@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { version as appVersion } from './apps/web/package.json';
 
 if (!process.env.DATABASE_URL) process.loadEnvFile(path.resolve('apps/server/.env'));
 const schema = process.env.BB_E2E_SCHEMA ?? `bb_e2e_test_${randomUUID().replaceAll('-', '')}`;
@@ -19,7 +20,10 @@ export default defineConfig({
   workers: 1,
   globalTeardown: './tests/e2e-teardown.cjs',
   timeout: 45000,
-  use: { baseURL: 'http://localhost:5174', viewport: { width: 1440, height: 1000 }, trace: 'retain-on-failure' },
+  use: { baseURL: 'http://localhost:5174', viewport: { width: 1440, height: 1000 }, trace: 'retain-on-failure',
+    // Other feature tests use a profile that has already read this release.
+    storageState: { cookies: [], origins: [{ origin: 'http://localhost:5174', localStorage: [{ name: 'bluviboard:release-seen', value: appVersion }] }] },
+  },
   webServer: [
     {
       command: 'node ../../tests/e2e-server.cjs',

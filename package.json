@@ -1,6 +1,6 @@
 {
   "name": "interactive-whiteboard",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -20,7 +20,7 @@
     "mail:preview": "npm run mail:preview --workspace @whiteboard/server --",
     "admin:create": "npm run build:server && npm run admin:create --workspace @whiteboard/server --",
     "test:api": "node --test tests/boards-api.test.cjs tests/auth-api.test.cjs",
-    "test:drawing": "node --test tests/drawing-geometry.test.cjs",
+    "test:drawing": "node --test tests/drawing-geometry.test.cjs tests/drawing-input.test.cjs",
     "test:updates": "node --test tests/desktop-release.test.cjs tests/desktop-package.test.cjs",
     "test:site-files": "node --test tests/site-files.test.cjs",
     "test:e2e": "playwright test"

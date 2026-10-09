@@ -146,6 +146,8 @@ test('failed saves keep the worker waiting and the draft editable; retry saves b
     const previousController = await page.evaluate(() => navigator.serviceWorker.controller?.scriptURL);
     await page.getByRole('button', { name: 'Обновить', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Обновление BluviBoard' }).getByRole('alert')).toContainText('Обновление отложено');
+    await expect(page.getByRole('dialog', { name: 'Что нового', exact: true })).toHaveCount(0);
+    expect(await page.evaluate(() => sessionStorage.getItem('bluviboard:release-after-update'))).toBeNull();
     await expect(page.locator('.pwa-app')).not.toHaveAttribute('inert', '');
     expect(await page.evaluate(() => navigator.serviceWorker.controller?.scriptURL)).toBe(previousController);
     expect(await page.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.waiting?.state)).toBe('installed');

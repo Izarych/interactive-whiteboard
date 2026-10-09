@@ -1,4 +1,4 @@
-import { useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Circle, Ellipse, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from 'react-konva';
 import type Konva from 'konva';
 import type { BoardBackground, DrawnElement, DrawingElement, DrawingTool, ImageElement } from '@whiteboard/shared';
@@ -8,9 +8,10 @@ import { eraseOutline, improveShape, touchesOutline } from './drawing-geometry';
 import type { Point } from './drawing-geometry';
 import { modifierHeld } from './drawing-settings';
 import type { ShapeModifier } from './drawing-settings';
+import { appendStrokePoints, pointerSamples } from './drawing-input';
 
 export type Tool = DrawingTool;
-export interface CanvasHandle { finish: () => void }
+export interface CanvasHandle { finish: () => void; zoomIn: () => void; zoomOut: () => void; resetView: () => void }
 interface Props {
   canvasRef?: React.RefObject<CanvasHandle | null>;
   elements: DrawingElement[];
@@ -18,6 +19,7 @@ interface Props {
   tool: Tool;
   color: string;
   width: number;
+  opacity?: number;
   eraserWidth?: number;
   shapeModifier?: ShapeModifier;
   onChange: (elements: DrawingElement[]) => void;
@@ -27,9 +29,9 @@ interface Props {
   onImageFiles: (files: File[], position?: { x: number; y: number }) => void;
 }
 
-function Element({ element, preview = false }: { element: DrawnElement; preview?: boolean }) {
+const Element = memo(function Element({ element, preview = false }: { element: DrawnElement; preview?: boolean }) {
   const { points: p, color, width } = element;
-  const common = { id: preview ? undefined : element.id, listening: !preview, stroke: color, strokeWidth: width, hitStrokeWidth: Math.max(14, width) };
+  const common = { id: preview ? undefined : element.id, listening: !preview, stroke: color, strokeWidth: width, opacity: element.opacity ?? 1, hitStrokeWidth: Math.max(14, width) };
   if (element.kind === 'stroke') return <Line {...common} points={p} lineCap="round" lineJoin="round" />;
   const x = Math.min(p[0], p[2]);
   const y = Math.min(p[1], p[3]);
@@ -38,9 +40,9 @@ function Element({ element, preview = false }: { element: DrawnElement; preview?
   return element.kind === 'rectangle'
     ? <Rect {...common} x={x} y={y} width={w} height={h} />
     : <Ellipse {...common} x={x + w / 2} y={y + h / 2} radiusX={w / 2} radiusY={h / 2} />;
-}
+});
 
-function CanvasImage({ element, draggable, onChange }: {
+const CanvasImage = memo(function CanvasImage({ element, draggable, onChange }: {
   element: ImageElement; draggable: boolean; onChange: (element: ImageElement) => void;
 }) {
   const [image, setImage] = useState<HTMLImageElement>();
@@ -70,9 +72,19 @@ function CanvasImage({ element, draggable, onChange }: {
     {!image && <Text x={element.x} y={element.y + element.height / 2 - 7} width={element.width} align="center"
       text={failed ? 'Изображение недоступно' : 'Загрузка…'} fill="#747b8d" fontSize={14} listening={false} />}
   </>;
-}
+});
 
-export function Canvas({ elements, background, tool, color, width, eraserWidth = 24, shapeModifier = 'Shift', onChange, stageRef, selectedImageId, onSelectImage, onImageFiles, canvasRef }: Props) {
+const Scene = memo(function Scene({ elements, selectable, onImageChange }: {
+  elements: DrawingElement[]; selectable: boolean; onImageChange: (element: ImageElement) => void;
+}) {
+  return <Layer name="saved-elements" listening={selectable}>
+    {elements.map((element) => element.kind === 'image'
+      ? <CanvasImage key={element.id} element={element} draggable={selectable} onChange={onImageChange} />
+      : <Element key={element.id} element={element} />)}
+  </Layer>;
+});
+
+export function Canvas({ elements, background, tool, color, width, opacity = 1, eraserWidth = 24, shapeModifier = 'Shift', onChange, stageRef, selectedImageId, onSelectImage, onImageFiles, canvasRef }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 1, height: 1 });
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
@@ -81,9 +93,26 @@ export function Canvas({ elements, background, tool, color, width, eraserWidth =
   const [eraserPosition, setEraserPosition] = useState<Point | null>(null);
   const gesture = useRef<{ pointerId: number; element: DrawnElement | null; erasing: DrawingElement[] | null; baseIds: Set<string>; pan: boolean; snap: boolean; last: Point; radius: number } | null>(null);
   const keyboardModifier = useRef<boolean | null>(null);
+  const draftFrame = useRef<number | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const elementsRef = useRef(elements);
   elementsRef.current = elements;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const onImageChange = useCallback((changed: ImageElement) => {
+    onChangeRef.current(elementsRef.current.map((item) => item.id === changed.id ? changed : item));
+  }, []);
+  const updateDraft = () => {
+    if (draftFrame.current !== null) return;
+    draftFrame.current = requestAnimationFrame(() => {
+      draftFrame.current = null;
+      const active = gesture.current;
+      if (!active?.element) return;
+      const snapshot = { ...active.element, points: [...active.element.points] };
+      setDraft(active.snap ? improveShape(snapshot) : snapshot);
+    });
+  };
+  useEffect(() => () => { if (draftFrame.current !== null) cancelAnimationFrame(draftFrame.current); }, []);
 
   useEffect(() => {
     const transformer = transformerRef.current;
@@ -103,10 +132,22 @@ export function Canvas({ elements, background, tool, color, width, eraserWidth =
     const position = stageRef.current?.getPointerPosition();
     return position ? [(position.x - view.x) / view.scale, (position.y - view.y) / view.scale] : null;
   };
+  const samples = (event: PointerEvent): Point[] => {
+    const stage = stageRef.current;
+    if (!stage) return [];
+    const content = stage.getContent();
+    return pointerSamples(event, content.getBoundingClientRect(), { width: content.clientWidth, height: content.clientHeight }, view);
+  };
+  const moveElement = (active: NonNullable<typeof gesture.current>, values: Point[], includeEnd = false) => {
+    if (!active.element || !values.length) return;
+    if (active.element.kind === 'stroke') appendStrokePoints(active.element.points, values, view.scale, includeEnd);
+    else active.element = { ...active.element, points: [...active.element.points.slice(0, 2), ...values[values.length - 1]] };
+  };
 
   const finish = (cancelled = false) => {
     const active = gesture.current;
     if (!active) return;
+    if (draftFrame.current !== null) { cancelAnimationFrame(draftFrame.current); draftFrame.current = null; }
     gesture.current = null;
     if (!cancelled && active.element) onChange([...elementsRef.current, active.snap ? improveShape(active.element) : active.element]);
     if (!cancelled && active.erasing && (active.erasing.length !== active.baseIds.size || active.erasing.some((element, i) => element !== elementsRef.current[i]))) {
@@ -117,7 +158,7 @@ export function Canvas({ elements, background, tool, color, width, eraserWidth =
     // An interrupted pan must not leave Konva dragging on the next tool.
     stageRef.current?.stopDrag();
   };
-  useImperativeHandle(canvasRef, () => ({ finish: () => finish() }));
+  useImperativeHandle(canvasRef, () => ({ finish: () => finish(), zoomIn: () => zoom(view.scale * 1.2), zoomOut: () => zoom(view.scale / 1.2), resetView: () => setView({ x: 0, y: 0, scale: 1 }) }));
 
   useEffect(() => { keyboardModifier.current = null; }, [shapeModifier]);
 
@@ -133,7 +174,7 @@ export function Canvas({ elements, background, tool, color, width, eraserWidth =
       if (!active.element || event.key !== shapeModifier) return;
       // Refinement belongs to this gesture, even if the key is released before the pointer.
       active.snap ||= keyboardModifier.current;
-      setDraft(active.snap ? improveShape(active.element) : active.element);
+      updateDraft();
       event.preventDefault();
     };
     const blur = () => { keyboardModifier.current = false; finish(); };
@@ -200,8 +241,8 @@ export function Canvas({ elements, background, tool, color, width, eraserWidth =
           if (!p) return;
           const pan = tool === 'hand' || event.evt.button === 1;
           const element: DrawnElement | null = !pan && tool !== 'eraser' ? {
-            id: crypto.randomUUID(), kind: tool === 'pen' ? 'stroke' : tool === 'rectangle' ? 'rectangle' : 'ellipse',
-            color, width, points: [...p, ...p],
+            id: crypto.randomUUID(), kind: tool === 'pen' || tool === 'highlighter' ? 'stroke' : tool === 'rectangle' ? 'rectangle' : 'ellipse',
+            color, width, ...(opacity < 1 ? { opacity } : {}), points: [...p, ...p],
           } : null;
           gesture.current = { pointerId: event.evt.pointerId, element, erasing: tool === 'eraser' && !pan ? [...elementsRef.current] : null,
             baseIds: new Set(elementsRef.current.map((element) => element.id)), pan, snap: keyboardModifier.current ?? modifierHeld(event.evt, shapeModifier), last: p, radius: eraserWidth / 2 / view.scale };
@@ -209,7 +250,7 @@ export function Canvas({ elements, background, tool, color, width, eraserWidth =
           (event.evt.target as HTMLElement).setPointerCapture(event.evt.pointerId);
           if (pan) stageRef.current?.startDrag();
           if (gesture.current.erasing) { setEraserPosition(p); erase(gesture.current, p, event.evt.shiftKey); }
-          setDraft(element && gesture.current.snap ? improveShape(element) : element);
+          updateDraft();
         }}
         onPointerMove={(event) => {
           const p = point();
@@ -220,22 +261,17 @@ export function Canvas({ elements, background, tool, color, width, eraserWidth =
             if (p) erase(active, p, event.evt.shiftKey);
             return;
           }
-          if (!p || !active.element) return;
-          const previous = active.element.points;
-          if (active.element.kind === 'stroke') {
-            const dx = p[0] - previous[previous.length - 2];
-            const dy = p[1] - previous[previous.length - 1];
-            if (dx * dx + dy * dy < 1 / view.scale ** 2 || previous.length >= 40000) return;
-          }
-          active.element = { ...active.element, points: active.element.kind === 'stroke' ? [...previous, ...p] : [...previous.slice(0, 2), ...p] };
+          if (!active.element) return;
+          moveElement(active, samples(event.evt));
           active.snap ||= keyboardModifier.current ?? modifierHeld(event.evt, shapeModifier);
-          setDraft(active.snap ? improveShape(active.element) : active.element);
+          updateDraft();
         }}
         onPointerUp={(event) => {
           const active = gesture.current;
           if (active?.pointerId !== event.evt.pointerId) return;
           const p = point();
           if (p && active.erasing) erase(active, p, event.evt.shiftKey);
+          if (active.element) moveElement(active, samples(event.evt), true);
           finish();
         }}
         onPointerCancel={(event) => { if (gesture.current?.pointerId === event.evt.pointerId) finish(true); }}
@@ -243,11 +279,8 @@ export function Canvas({ elements, background, tool, color, width, eraserWidth =
           event.evt.preventDefault();
           if (!gesture.current) zoom(view.scale * (event.evt.deltaY > 0 ? 0.9 : 1.1), stageRef.current?.getPointerPosition() ?? undefined);
         }}>
-        <Layer>
-          {(erasedPreview ?? elements).map((element) => element.kind === 'image'
-            ? <CanvasImage key={element.id} element={element} draggable={tool === 'select'}
-              onChange={(changed) => onChange(elementsRef.current.map((item) => item.id === changed.id ? changed : item))} />
-            : <Element key={element.id} element={element} />)}
+        <Scene elements={erasedPreview ?? elements} selectable={tool === 'select'} onImageChange={onImageChange} />
+        <Layer name="active-gesture">
           {draft && <Element element={draft} preview />}
           {tool === 'eraser' && eraserPosition && <Circle name="editor-overlay" x={eraserPosition[0]} y={eraserPosition[1]} radius={eraserWidth / 2 / view.scale}
             stroke="#6366f1" strokeWidth={1 / view.scale} fill="#6366f110" listening={false} />}

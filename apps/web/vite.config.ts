@@ -1,8 +1,21 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import type { Plugin } from 'vite';
+
+function releaseNotes(version: string, desktop = false) {
+  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Invalid release version');
+  const text = readFileSync(new URL(`../../docs/releases/${desktop ? 'desktop/' : ''}${version}.md`, import.meta.url), 'utf8').trim();
+  const title = `BluviBoard${desktop ? ' для Windows' : ''} ${version}`;
+  const [heading, ...lines] = text.split(/\r?\n/);
+  const notes = lines.join('\n').trim();
+  if (heading !== `# ${title}` || !notes) throw new Error(`Missing or mismatched release notes for ${title}`);
+  return { version, title, notes, kind: desktop ? 'desktop' : 'web' };
+}
+const webVersion = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version;
+const desktopReleases = Object.fromEntries(readdirSync(new URL('../../docs/releases/desktop/', import.meta.url))
+  .filter((name) => /^\d+\.\d+\.\d+\.md$/.test(name)).map((name) => { const version = name.slice(0, -3); return [version, releaseNotes(version, true)]; }));
 
 function pwaWorker(): Plugin {
   return {
@@ -25,6 +38,7 @@ function pwaWorker(): Plugin {
 
 export default defineConfig({
   plugins: [react(), pwaWorker()],
+  define: { __BLUVIBOARD_RELEASES__: JSON.stringify({ web: releaseNotes(webVersion), desktop: desktopReleases }) },
   server: {
     proxy: {
       '/api': process.env.API_PROXY_TARGET ?? 'http://localhost:3000',

@@ -182,8 +182,10 @@ test('drawing tools, autosave, undo/redo, independent boards, reload and deletio
     await draw(page, [150, 160], [340, 230]);
     await expect(page.getByText('1 объектов', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Прямоугольник', exact: true }).click();
+    await page.keyboard.press('Escape');
     await draw(page, [400, 180], [580, 330]);
     await page.getByRole('button', { name: 'Эллипс', exact: true }).click();
+    await page.keyboard.press('Escape');
     await draw(page, [620, 200], [790, 340]);
     await expect(page.getByText('3 объектов', { exact: true })).toBeVisible();
     await expect(page.getByText('Сохранено', { exact: true })).toBeVisible();
@@ -197,6 +199,7 @@ test('drawing tools, autosave, undo/redo, independent boards, reload and deletio
     await page.keyboard.press('Control+Shift+Z');
     await expect(page.getByText('3 объектов', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Ластик', exact: true }).click();
+    await page.keyboard.press('Escape');
     await page.keyboard.down('Shift');
     await draw(page, [200, 178], [260, 200]);
     await page.keyboard.up('Shift');
@@ -208,8 +211,10 @@ test('drawing tools, autosave, undo/redo, independent boards, reload and deletio
     await expect(page.getByRole('button', { name: '120%', exact: true })).toBeVisible();
     await page.getByRole('button', { name: '120%', exact: true }).click();
     await page.getByRole('button', { name: 'Рука', exact: true }).click();
+    await page.keyboard.press('Escape');
     await draw(page, [700, 450], [780, 500]);
     await page.getByRole('button', { name: 'Карандаш', exact: true }).click();
+    await page.keyboard.press('Escape');
     await draw(page, [200, 400], [300, 460]);
     await expect(page.getByText('4 объектов', { exact: true })).toBeVisible();
 

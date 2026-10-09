@@ -12,9 +12,10 @@ import { usePwa } from './pwa';
 import { PwaUpdateNotice } from './PwaControls';
 import { useDesktop } from './desktop';
 import { DesktopCloseNotice, DesktopUpdateNotice } from './DesktopControls';
+import { initializeReleaseSession } from './release-notes';
 const AdminPanel = lazy(() => import('./AdminPanel'));
 
-function App() {
+function App({ releaseNotesOpen = false }: { releaseNotesOpen?: boolean }) {
   const { updating } = usePwa();
   const { closing, preparingUpdate } = useDesktop();
   const leaving = updating || closing || preparingUpdate;
@@ -34,6 +35,7 @@ function App() {
       const current = await api.session();
       if (sequence !== bootRequest.current) return;
       setSession(current);
+      initializeReleaseSession(current.kind !== 'anonymous');
       if (!window.location.pathname.startsWith('/admin') && current.kind === 'guest' && pendingRegistration(current.workspaceId)) setAuth({ mode: 'register' });
     } catch (reason) { if (sequence === bootRequest.current) setBootError(errorMessage(reason)); }
   }, []);
@@ -67,7 +69,7 @@ function App() {
     if (session?.kind === 'user') changeSession({ ...session, user });
   };
 
-  if (!session) return <main className={`auth-shell ${admin ? '' : 'auth-shell--public'}`}>
+  if (!session) return <main className={`auth-shell ${admin ? '' : 'auth-shell--public'}`} inert={releaseNotesOpen}>
     {!admin && <PublicIntro />}
     <section className="auth-card auth-loading">
       <img src="/favicon.svg" width="64" height="64" alt="BluviBoard" />
@@ -78,12 +80,12 @@ function App() {
 
   const active = session.kind !== 'anonymous';
   const needsAdminLogin = admin && (session.kind !== 'user' || session.user.role !== 'admin');
-  return <><div className="pwa-app" inert={leaving}>
+  return <><div className="pwa-app" inert={leaving || releaseNotesOpen}>
     {active && !needsAdminLogin && (admin ? session.kind === 'user' && session.user.role === 'admin' ? <Suspense fallback={<div className="loading-overlay">Открываем панель управления…</div>}>
-      <AdminPanel user={session.user} blocked={profile || !!auth || leaving} onBack={() => navigate(false)} onProfile={() => setProfile(true)}
+      <AdminPanel user={session.user} blocked={profile || !!auth || leaving || releaseNotesOpen} onBack={() => navigate(false)} onProfile={() => setProfile(true)}
         onLogout={async () => { await api.logout(); changeSession(await api.session()); }} /></Suspense>
       : <div className="auth-shell"><section className="auth-card"><h1>Недостаточно прав</h1><p className="auth-subtitle">Панель управления доступна только администратору.</p><button className="primary-button" onClick={() => navigate(false)}>Вернуться к доскам</button></section></div>
-      : <Workspace key={`${session.workspaceId}:${session.kind}`} session={session} blocked={!!auth || profile || leaving}
+      : <Workspace key={`${session.workspaceId}:${session.kind}`} session={session} blocked={!!auth || profile || leaving || releaseNotesOpen}
         onAuth={(mode) => setAuth({ mode })} onProfile={() => setProfile(true)} onSession={changeSession} onAdmin={() => navigate(true)} />)}
     {(!active || auth || needsAdminLogin) && <AuthPanel key={admin ? 'admin-auth' : 'public-auth'} adminOnly={admin} session={session} initialMode={auth?.mode ?? 'login'} initialEmail={auth?.email}
       onDone={changeSession} onClose={active && !needsAdminLogin ? () => setAuth(null) : undefined}

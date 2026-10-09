@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { errorMessage } from './api';
 import { isDesktop } from './platform';
+import { cancelReleaseUpdate, markReleaseUpdate } from './release-notes';
 
 interface InstallPrompt extends Event {
   prompt: () => Promise<void>;
@@ -105,16 +106,19 @@ export async function applyPwaUpdate() {
   try {
     await prepareToLeave();
     // Another window may already have activated the same worker while we saved.
-    if (worker.state === 'activated') { window.location.reload(); return; }
+    if (worker.state === 'activated') { markReleaseUpdate(); window.location.reload(); return; }
     if (worker.state !== 'installed') throw new Error('Версия приложения изменилась. Повторите обновление.');
     reloadRequested = true;
     reloadTimeout = window.setTimeout(() => {
       reloadRequested = false;
+      cancelReleaseUpdate();
       publish({ updating: false, error: 'Не удалось запустить обновление. Попробуйте снова.' });
     }, 15000);
+    markReleaseUpdate();
     worker.postMessage({ type: 'APPLY_UPDATE' });
   } catch (reason) {
     reloadRequested = false;
+    cancelReleaseUpdate();
     window.clearTimeout(reloadTimeout);
     publish({ updating: false, error: `Обновление отложено. ${errorMessage(reason)}` });
   }

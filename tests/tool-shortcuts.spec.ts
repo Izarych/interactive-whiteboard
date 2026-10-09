@@ -123,12 +123,14 @@ test('shortcut API validates configuration and isolates different workspaces', a
     expect((await other.request.get('/api/preferences/tools')).status()).toBe(401);
     expect((await other.request.put('/api/preferences/tools', { data: { shortcuts: {} } })).status()).toBe(401);
     expect((await context.request.put('/api/preferences/tools', { data: { shortcuts: { eraser: shortcut('CapsLock') } } })).status()).toBe(200);
+    const configured = { eraser: shortcut('CapsLock'), highlighter: shortcut('F1', true) };
+    expect((await context.request.put('/api/preferences/tools', { data: { shortcuts: configured } })).status()).toBe(200);
     for (const shortcuts of [{ eraser: shortcut('ShiftLeft') }, { eraser: shortcut('KeyZ', true) }, { eraser: shortcut('CapsLock'), hand: shortcut('CapsLock') }, { unknown: shortcut('KeyA') }, { eraser: null }]) {
       expect((await context.request.put('/api/preferences/tools', { data: { shortcuts } })).status()).toBe(400);
     }
     otherWorkspace = (await (await other.request.post('/api/auth/guest')).json()).workspaceId;
     expect(await (await other.request.get('/api/preferences/tools')).json()).toEqual({ shortcuts: {} });
-    expect(await (await context.request.get('/api/preferences/tools')).json()).toEqual({ shortcuts: { eraser: shortcut('CapsLock') } });
+    expect(await (await context.request.get('/api/preferences/tools')).json()).toEqual({ shortcuts: configured });
   } finally {
     await other.close();
     await cleanupWorkspaces([current.workspace, ...(otherWorkspace ? [otherWorkspace] : [])], process.env.BB_E2E_IMAGE_DIRECTORY);

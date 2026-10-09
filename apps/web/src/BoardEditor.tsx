@@ -13,7 +13,8 @@ import { saveShapeModifier, shapeModifiers, storedShapeModifier } from './drawin
 import type { ShapeModifier } from './drawing-settings';
 import { ToolShortcutEditor } from './ToolShortcutEditor';
 import { shortcutLabel, shortcutMatches } from './tool-shortcuts';
-import { Circle, Download, Eraser, Grid2X2, Hand, ImagePlus, Keyboard, MoreHorizontal, MousePointer2, Palette, PanelLeftClose, PanelLeftOpen, Pencil, Plus, RectangleHorizontal, Redo2, Trash2, Undo2 } from 'lucide-react';
+import { ColorPalette, drawingColors, ToolSettings } from './ToolSettings';
+import { Circle, Download, Eraser, Grid2X2, Hand, Highlighter, ImagePlus, Keyboard, MoreHorizontal, MousePointer2, Palette, PanelLeftClose, PanelLeftOpen, Pencil, Plus, RectangleHorizontal, Redo2, Trash2, Undo2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 export interface EditorHandle {
@@ -24,12 +25,13 @@ export interface EditorHandle {
 const tools: { id: Tool; label: string; icon: LucideIcon }[] = [
   { id: 'select', label: 'Выделение', icon: MousePointer2 },
   { id: 'pen', label: 'Карандаш', icon: Pencil },
+  { id: 'highlighter', label: 'Маркер', icon: Highlighter },
   { id: 'eraser', label: 'Ластик', icon: Eraser },
   { id: 'rectangle', label: 'Прямоугольник', icon: RectangleHorizontal },
   { id: 'ellipse', label: 'Эллипс', icon: Circle },
   { id: 'hand', label: 'Рука', icon: Hand },
 ];
-const colors = ['#202938', '#64748b', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6'];
+const colors = drawingColors;
 
 export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sidebarCollapsed, onToggleSidebar, onNewBoard, toolShortcuts, shortcutsReady, shortcutsError, onReloadShortcuts, onSaveShortcuts }: {
   initial: Board; onSaved: (board: Board) => void; onCopy: () => void;
@@ -49,6 +51,9 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
   const [color, setColor] = useState(colors[0]);
   const [width, setWidth] = useState(4);
   const [eraserWidth, setEraserWidth] = useState(24);
+  const [highlighterColor, setHighlighterColor] = useState('#eab308');
+  const [highlighterWidth, setHighlighterWidth] = useState(24);
+  const [highlighterOpacity, setHighlighterOpacity] = useState(.35);
   const [shapeModifier, setShapeModifier] = useState(storedShapeModifier);
   const [history, setHistory] = useState<{ undo: DrawingElement[][]; redo: DrawingElement[][] }>({ undo: [], redo: [] });
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -61,15 +66,16 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
   const [imageError, setImageError] = useState('');
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [panel, setPanel] = useState<'pen' | 'background' | 'board' | 'shortcut' | null>(null);
+  const [panel, setPanel] = useState<'tool' | 'pen' | 'background' | 'board' | 'shortcut' | null>(null);
   const [shortcutTool, setShortcutTool] = useState<Tool>('pen');
   const previousTool = useRef<Tool>('pen');
   const editorRoot = useRef<HTMLElement>(null);
-  const selectTool = (next: Tool) => {
+  const selectTool = (next: Tool, settings = false) => {
     canvasRef.current?.finish();
     if (next !== tool) previousTool.current = tool;
-    setTool(next); setPanel(null);
+    setTool(next); setPanel(settings ? 'tool' : null);
   };
+  const setModifier = (value: ShapeModifier) => { setShapeModifier(value); saveShapeModifier(value); };
   const background = board.document.background ?? DEFAULT_BACKGROUND;
   const saveText = uploading ? 'Загрузка изображения…' : status === 'saved' ? 'Сохранено' : status === 'saving' ? 'Сохранение…' : status === 'pending' ? 'Есть изменения' : 'Не сохранено';
   const togglePanel = (next: NonNullable<typeof panel>) => setPanel((previous) => previous === next ? null : next);
@@ -137,6 +143,7 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
             y: center.y - asset.height * factor / 2 + index * 24 / scale,
             width: asset.width * factor, height: asset.height * factor,
           };
+          canvasRef.current?.finish();
           changeElements([...snapshot().document.elements, image]);
           setSelectedImageId(image.id);
           selectTool('select');
@@ -242,7 +249,7 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
 
   return (
     <section ref={editorRoot} className="editor" inert={disabled}>
-      <Canvas elements={board.document.elements} background={background} tool={tool} color={color} width={width} eraserWidth={eraserWidth} shapeModifier={shapeModifier} stageRef={stageRef} canvasRef={canvasRef} onChange={changeElements}
+      <Canvas elements={board.document.elements} background={background} tool={tool} color={tool === 'highlighter' ? highlighterColor : color} width={tool === 'highlighter' ? highlighterWidth : width} opacity={tool === 'highlighter' ? highlighterOpacity : 1} eraserWidth={eraserWidth} shapeModifier={shapeModifier} stageRef={stageRef} canvasRef={canvasRef} onChange={changeElements}
         selectedImageId={selectedImageId} onSelectImage={setSelectedImageId} onImageFiles={insertImages} />
       <div className="editor-chrome">
         <header className="board-info-panel">
@@ -263,23 +270,30 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
           </div>
         </header>
         <div className="tool-dock" role="toolbar" aria-label="Инструменты рисования">
-          {tools.map((item) => <button key={item.id} title={`${item.label}${toolShortcuts[item.id] ? ` (${shortcutLabel(toolShortcuts[item.id])})` : ''} · Правой кнопкой — настроить хоткей`} aria-label={item.label} aria-pressed={tool === item.id} className={`editor-icon-button ${tool === item.id ? 'active' : ''}`} onClick={() => selectTool(item.id)} onContextMenu={(event) => {
+          {tools.map((item) => <div key={item.id} className="editor-popover-anchor" data-editor-panel={tool === item.id && panel === 'tool' ? 'tool' : undefined}>
+            <button title={`${item.label}${toolShortcuts[item.id] ? ` (${shortcutLabel(toolShortcuts[item.id])})` : ''} · Клик — настройки · Правой кнопкой — хоткей`} aria-label={item.label} aria-pressed={tool === item.id} aria-expanded={tool === item.id && panel === 'tool'} aria-controls={`tool-settings-${item.id}`} className={`editor-icon-button ${tool === item.id ? 'active' : ''}`} onClick={() => selectTool(item.id, true)} onContextMenu={(event) => {
             event.preventDefault(); setShortcutTool(item.id); setPanel('shortcut');
-          }}><item.icon size={19} strokeWidth={1.8} /></button>)}
+          }}><item.icon size={19} strokeWidth={1.8} /></button>
+            {tool === item.id && panel === 'tool' && <ToolSettings tool={tool} label={item.label} color={tool === 'highlighter' ? highlighterColor : color} width={tool === 'highlighter' ? highlighterWidth : width} opacity={highlighterOpacity} eraserWidth={eraserWidth} modifier={shapeModifier}
+              selectedImage={board.document.elements.find((element): element is ImageElement => element.kind === 'image' && element.id === selectedImageId) ?? null}
+              onColor={tool === 'highlighter' ? setHighlighterColor : setColor} onWidth={tool === 'highlighter' ? setHighlighterWidth : setWidth} onOpacity={setHighlighterOpacity} onEraserWidth={setEraserWidth} onModifier={setModifier}
+              onShortcut={() => { setShortcutTool(tool); setPanel('shortcut'); }} onDeleteImage={deleteSelected}
+              onZoomIn={() => canvasRef.current?.zoomIn()} onZoomOut={() => canvasRef.current?.zoomOut()} onResetView={() => canvasRef.current?.resetView()} />}
+          </div>)}
           <div className="editor-popover-anchor" data-editor-panel="shortcut">
             <button className={`editor-icon-button ${panel === 'shortcut' ? 'active' : ''}`} aria-label="Настроить хоткей инструмента" title="Настроить хоткей выбранного инструмента" aria-expanded={panel === 'shortcut'} aria-controls="tool-shortcut-settings" onClick={() => { setShortcutTool(tool); togglePanel('shortcut'); }}><Keyboard size={19} /></button>
             {panel === 'shortcut' && <ToolShortcutEditor key={shortcutTool} tool={shortcutTool} tools={tools} shortcuts={toolShortcuts} ready={shortcutsReady} loadError={shortcutsError} onTool={setShortcutTool} onReload={onReloadShortcuts} onSave={onSaveShortcuts} />}
           </div>
           <span className="editor-divider" />
           <div className="editor-popover-anchor" data-editor-panel="pen">
-            <button className={`editor-icon-button pen-settings-button ${panel === 'pen' ? 'active' : ''}`} aria-label="Цвет и толщина" title="Цвет и толщина" aria-expanded={panel === 'pen'} aria-controls="pen-settings" onClick={() => togglePanel('pen')}><Palette size={19} /><span className="current-color" style={{ backgroundColor: color }} /></button>
+            <button className={`editor-icon-button pen-settings-button ${panel === 'pen' ? 'active' : ''}`} aria-label="Цвет и толщина" title="Цвет и толщина" aria-expanded={panel === 'pen'} aria-controls="pen-settings" onClick={() => togglePanel('pen')}><Palette size={19} /><span className="current-color" style={{ backgroundColor: tool === 'highlighter' ? highlighterColor : color }} /></button>
             {panel === 'pen' && <section id="pen-settings" className="editor-popover pen-settings" role="dialog" aria-label="Цвет и толщина">
-              <h2>Карандаш</h2><div className="colors">{colors.map((value) => <button key={value} className={`color-button ${color === value ? 'active' : ''}`} style={{ backgroundColor: value }} aria-label={`Цвет ${value}`} aria-pressed={color === value} onClick={() => setColor(value)} />)}
-                <label className="custom-color" title="Произвольный цвет">+<input aria-label="Произвольный цвет" type="color" value={color} onChange={(event) => setColor(event.target.value)} /></label></div>
-              <label className="width-control">Толщина<input aria-label="Толщина карандаша" type="range" min="1" max="32" value={width} onChange={(event) => setWidth(Number(event.target.value))} /><span>{width}</span></label>
+              <h2>{tool === 'highlighter' ? 'Маркер' : 'Карандаш'}</h2><ColorPalette color={tool === 'highlighter' ? highlighterColor : color} onChange={tool === 'highlighter' ? setHighlighterColor : setColor} />
+              <label className="width-control">Толщина<input aria-label={tool === 'highlighter' ? 'Толщина маркера' : 'Толщина карандаша'} type="range" min={tool === 'highlighter' ? 4 : 1} max={tool === 'highlighter' ? 64 : 32} value={tool === 'highlighter' ? highlighterWidth : width} onChange={(event) => { const value = Number(event.target.value); if (tool === 'highlighter') setHighlighterWidth(value); else setWidth(value); }} /><span>{tool === 'highlighter' ? highlighterWidth : width}</span></label>
+              {tool === 'highlighter' && <label className="width-control">Непрозрачность<input aria-label="Непрозрачность маркера" type="range" min="10" max="80" value={Math.round(highlighterOpacity * 100)} onChange={(event) => setHighlighterOpacity(Number(event.target.value) / 100)} /><span>{Math.round(highlighterOpacity * 100)}%</span></label>}
               <label className="width-control">Ластик<input aria-label="Размер ластика" type="range" min="8" max="80" value={eraserWidth} onChange={(event) => setEraserWidth(Number(event.target.value))} /><span>{eraserWidth}</span></label>
               <label className="shape-modifier-control">Выравнивание фигур<select aria-label="Хоткей выравнивания фигур" value={shapeModifier} onChange={(event) => {
-                const value = event.target.value as ShapeModifier; setShapeModifier(value); saveShapeModifier(value);
+                setModifier(event.target.value as ShapeModifier);
               }}>{shapeModifiers.map((modifier) => <option key={modifier.value} value={modifier.value}>{modifier.label}</option>)}</select></label>
               <p className="drawing-settings-note">Нажмите модификатор во время штриха: выравнивание сохраняется до его завершения.</p>
             </section>}
@@ -305,7 +319,7 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
       </div>
       <footer className="editor-footer"><span>{board.document.elements.length} объектов</span>
         <span>{tool === 'select' ? 'Перетаскивайте изображение · Уголки — размер · Delete — удалить' :
-          tool === 'eraser' ? 'Ластик — точечно · Shift — весь объект' : `${shapeModifiers.find((item) => item.value === shapeModifier)!.label} — выровнять фигуру · Ctrl+V — скриншот`}</span></footer>
+          tool === 'eraser' ? 'Ластик — точечно · Shift — весь объект' : tool === 'highlighter' ? 'Маркер — полупрозрачное выделение цветом' : `${shapeModifiers.find((item) => item.value === shapeModifier)!.label} — выровнять фигуру · Ctrl+V — скриншот`}</span></footer>
     </section>
   );
 }

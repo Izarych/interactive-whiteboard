@@ -91,6 +91,9 @@ async function main() {
     await route.fulfill({ status: 200, contentType: mime[path.extname(file)] || 'application/octet-stream', headers: { 'Content-Security-Policy': csp }, body: fs.readFileSync(file) });
   });
   await page.goto('https://bluviboard.ru/');
+  const releaseNotes = page.getByRole('dialog', { name: 'Что нового', exact: true });
+  await expect(releaseNotes).toContainText(`BluviBoard ${require(path.join(root, 'apps/web/package.json')).version}`);
+  await releaseNotes.getByRole('button', { name: 'Понятно', exact: true }).click();
   await expect(page.getByTestId('canvas')).toBeVisible();
   assert.equal(await page.evaluate(() => window.__BLUVIBOARD_DESKTOP__), true);
   assert.equal(await page.evaluate(() => window.__BLUVIBOARD_DESKTOP_VERSION__), version);
@@ -143,7 +146,7 @@ async function main() {
   assert.ok((await reopened.cookies('https://bluviboard.ru/')).some((cookie) => cookie.name === 'native-persistence-check' && cookie.value === 'persisted'));
   assert.equal(await page.evaluate(() => localStorage.getItem('native-persistence-check')), 'persisted');
   assert.deepEqual(errors, []);
-  console.log('Native Windows smoke passed: WebView2, desktop UI, tool shortcuts, single instance, cookies/storage persistence, and save-before-close.');
+  console.log('Native Windows smoke passed: WebView2, desktop UI, release notes, tool shortcuts, single instance, cookies/storage persistence, and save-before-close.');
 }
 
 main().catch(async (error) => {

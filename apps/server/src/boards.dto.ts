@@ -44,6 +44,12 @@ class DrawnElementDto extends BaseElementDto {
   @Max(64)
   width: number;
 
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsNumber({ allowInfinity: false, allowNaN: false })
+  @Min(0.05)
+  @Max(1)
+  opacity?: number;
+
   @IsArray()
   @ArrayMinSize(4)
   @ArrayMaxSize(40000)

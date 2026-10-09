@@ -5,6 +5,8 @@ export interface DrawnElement {
   kind: 'stroke' | 'rectangle' | 'ellipse';
   color: string;
   width: number;
+  /** Highlighter strokes use partial opacity; legacy drawings default to 1. */
+  opacity?: number;
   /** World coordinates. Shapes use [startX, startY, endX, endY]. */
   points: number[];
 }
@@ -21,7 +23,7 @@ export interface ImageElement {
 
 export type DrawingElement = DrawnElement | ImageElement;
 
-export type DrawingTool = 'pen' | 'eraser' | 'rectangle' | 'ellipse' | 'hand' | 'select';
+export type DrawingTool = 'pen' | 'highlighter' | 'eraser' | 'rectangle' | 'ellipse' | 'hand' | 'select';
 export interface ToolShortcut {
   code: string;
   ctrl: boolean;
