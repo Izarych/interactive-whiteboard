@@ -47,8 +47,8 @@ export function ReleaseNotesDialog({ entries, onClose }: { entries: ReleaseNotes
   return <div className="auth-shell auth-shell--modal release-notes-overlay">
     <section ref={dialog} className="auth-card release-notes-dialog" role="dialog" aria-modal="true" aria-labelledby="release-notes-title">
       <button ref={close} className="modal-close" aria-label="Закрыть описание обновления" onClick={onClose}><X size={20} /></button>
-      <header className="release-notes-header"><Sparkles size={22} /><div><h2 id="release-notes-title">Что нового</h2><p>Изменения установленной версии BluviBoard</p></div></header>
-      <div className="release-notes-content">{entries.map((entry) => <article key={`${entry.kind}:${entry.version}`}>
+      <header className="release-notes-header"><Sparkles size={22} /><div><h2 id="release-notes-title">Что нового</h2><p>Последние три версии BluviBoard — от новой к старым</p></div></header>
+      <div className="release-notes-content" tabIndex={0} role="region" aria-label="История изменений">{entries.map((entry) => <article key={`${entry.kind}:${entry.version}`}>
         <h3>{entry.title}</h3><NotesBody notes={entry.notes} />
       </article>)}</div>
       <footer className="release-notes-footer"><button className="primary-button" onClick={onClose}>Понятно</button></footer>

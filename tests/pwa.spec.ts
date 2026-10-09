@@ -2,6 +2,11 @@ import { test, expect } from '@playwright/test';
 import type { Page, BrowserContext } from '@playwright/test';
 import sharp from 'sharp';
 import { cleanupWorkspaces } from './asset-test-utils.cjs';
+import { registerDifferentBuild, cleanupWorkerFixtures } from './pwa-test-utils.cjs';
+import { version as appVersion } from '../apps/web/package.json';
+import { version as desktopVersion } from '../apps/desktop/package.json';
+
+test.afterEach(cleanupWorkerFixtures);
 
 async function controlled(page: Page) {
   await page.evaluate(() => navigator.serviceWorker.ready);
@@ -10,8 +15,7 @@ async function controlled(page: Page) {
 
 async function offerUpdate(page: Page) {
   await controlled(page);
-  // A new script URL starts a real worker lifecycle without changing build files.
-  await page.evaluate(() => navigator.serviceWorker.register(`/sw.js?update-test=${crypto.randomUUID()}`, { scope: '/', updateViaCache: 'none' }).then(() => {}));
+  await registerDifferentBuild(page);
   await expect(page.getByRole('region', { name: 'Обновление BluviBoard' })).toBeVisible();
 }
 
@@ -92,6 +96,75 @@ test('installation offers browser instructions or the native prompt and hides af
   await expect(button).toHaveCount(0);
 });
 
+test('a same-build worker activates silently without reloading or interrupting drawing and uploads', async ({ page, context }) => {
+  let workspace: string | undefined;
+  let releaseUpload = () => {};
+  const uploadGate = new Promise<void>((resolve) => { releaseUpload = resolve; });
+  try {
+    const board = await createBoard(page, context);
+    workspace = board.workspaceId;
+    await controlled(page);
+    await page.evaluate(() => { (window as Window & { sameBuildProbe?: string }).sameBuildProbe = crypto.randomUUID(); });
+    const probe = await page.evaluate(() => (window as Window & { sameBuildProbe?: string }).sameBuildProbe);
+    await page.route('**/api/assets', async (route) => { await uploadGate; await route.fulfill({ response: await route.fetch() }); });
+    const image = await sharp({ create: { width: 100, height: 80, channels: 3, background: '#2563eb' } }).png().toBuffer();
+    await page.getByLabel('Загрузить изображения').setInputFiles({ name: 'same-build.png', mimeType: 'image/png', buffer: image });
+    await expect(page.getByText('Загрузка изображения…', { exact: true })).toBeVisible();
+    const box = (await page.getByTestId('canvas').boundingBox())!;
+    await page.mouse.move(box.x + 100, box.y + 180);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 240, box.y + 240, { steps: 8 });
+    await page.evaluate(() => navigator.serviceWorker.register(`/sw.js?same-build-test=${crypto.randomUUID()}`, { scope: '/', updateViaCache: 'none' }).then(() => {}));
+    await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller?.scriptURL)).toContain('same-build-test=');
+    expect(await page.evaluate(() => (window as Window & { sameBuildProbe?: string }).sameBuildProbe)).toBe(probe);
+    await expect(page.getByRole('region', { name: 'Обновление BluviBoard' })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Что нового', exact: true })).toHaveCount(0);
+    await expect(page.getByText('0 объектов', { exact: true })).toBeVisible();
+    await expect(page.locator('.pwa-app')).not.toHaveAttribute('inert', '');
+    await page.mouse.up();
+    await expect(page.getByText('1 объектов', { exact: true })).toBeVisible();
+    releaseUpload();
+    await expect(page.getByText('2 объектов', { exact: true })).toBeVisible();
+    await expect(page.getByText('Сохранено', { exact: true })).toBeVisible();
+    const saved = await (await context.request.get(`/api/boards/${board.id}`)).json();
+    expect(saved.document.elements.map((element: { kind: string }) => element.kind)).toEqual(['stroke', 'image']);
+  } finally {
+    releaseUpload();
+    if (workspace) await cleanupWorkspaces([workspace], process.env.BB_E2E_IMAGE_DIRECTORY);
+  }
+});
+
+test('installed PWA and Windows modes also activate same-build workers without redundant offers or notes', async ({ browser }) => {
+  for (const mode of ['pwa', 'desktop']) {
+    const context = await browser.newContext({ baseURL: 'http://localhost:5174', storageState: { cookies: [], origins: [{ origin: 'http://localhost:5174', localStorage: [{ name: 'bluviboard:release-seen', value: appVersion }] }] } });
+    try {
+      await context.addInitScript(({ mode, version }) => {
+        if (mode === 'desktop') {
+          Object.defineProperty(window, '__BLUVIBOARD_DESKTOP__', { value: true });
+          Object.defineProperty(window, '__BLUVIBOARD_DESKTOP_VERSION__', { value: version });
+        } else {
+          const match = window.matchMedia.bind(window);
+          window.matchMedia = (query) => {
+            const media = match(query);
+            if (query === '(display-mode: standalone)') Object.defineProperty(media, 'matches', { value: true });
+            return media;
+          };
+        }
+      }, { mode, version: desktopVersion });
+      await context.route('**/api/desktop/latest', (route) => route.fulfill({ json: { release: null } }));
+      const page = await context.newPage();
+      await page.goto('/');
+      await controlled(page);
+      await page.evaluate(() => { (window as Window & { installedModeProbe?: boolean }).installedModeProbe = true; });
+      await page.evaluate(() => navigator.serviceWorker.register(`/sw.js?installed-mode-test=${crypto.randomUUID()}`, { scope: '/', updateViaCache: 'none' }).then(() => {}));
+      await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller?.scriptURL)).toContain('installed-mode-test=');
+      expect(await page.evaluate(() => (window as Window & { installedModeProbe?: boolean }).installedModeProbe)).toBe(true);
+      await expect(page.getByRole('region', { name: 'Обновление BluviBoard' })).toHaveCount(0);
+      await expect(page.getByRole('dialog', { name: 'Что нового', exact: true })).toHaveCount(0);
+    } finally { await context.close(); }
+  }
+});
+
 test('a real worker update can be postponed, waits for image uploads and saves drawings before reloading', async ({ page, context }) => {
   let workspace: string | undefined;
   let releaseUpload: () => void = () => {};
@@ -105,7 +178,11 @@ test('a real worker update can be postponed, waits for image uploads and saves d
     await draw(page);
     await expect(page.getByText('Сохранено', { exact: true })).toBeVisible();
     await page.reload();
-    await expect(page.getByRole('region', { name: 'Обновление BluviBoard' })).toBeVisible();
+    await controlled(page);
+    await expect(page.getByRole('region', { name: 'Обновление BluviBoard' })).toHaveCount(0);
+    // Reloading has already fetched the current UI. A later different build
+    // should still offer the guarded update while this window remains open.
+    await offerUpdate(page);
     await page.route('**/api/assets', async (route) => {
       await uploadGate;
       await route.fulfill({ response: await route.fetch() });

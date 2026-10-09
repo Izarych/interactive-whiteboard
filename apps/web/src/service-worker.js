@@ -1,4 +1,6 @@
-const cacheName = 'bluviboard-offline-__PWA_BUILD_ID__';
+const buildId = '__PWA_BUILD_ID__';
+const appVersion = '__PWA_APP_VERSION__';
+const cacheName = `bluviboard-offline-${buildId}`;
 const offlinePage = '/offline.html';
 
 self.addEventListener('install', (event) => {
@@ -18,7 +20,8 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('message', (event) => {
-  if (event.data?.type === 'APPLY_UPDATE') event.waitUntil(self.skipWaiting());
+  if (event.data?.type === 'GET_BUILD_INFO') event.ports[0]?.postMessage({ type: 'BUILD_INFO', buildId, version: appVersion });
+  else if (event.data?.type === 'APPLY_UPDATE') event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('fetch', (event) => {

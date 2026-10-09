@@ -27,31 +27,26 @@ function remember(key: string, version: string) {
   try { localStorage.setItem(key, version); }
   catch { try { sessionStorage.setItem(key, version); } catch { /* Reading notes remains usable without storage. */ } }
 }
-export function markReleaseUpdate() {
-  try { sessionStorage.setItem(pendingKey, String(Date.now())); } catch { /* Version comparison still handles a newer release. */ }
-}
-export function cancelReleaseUpdate() {
-  try { sessionStorage.removeItem(pendingKey); } catch { /* Browser storage may be unavailable. */ }
-}
-function pendingUpdate() {
-  try {
-    const value = sessionStorage.getItem(pendingKey);
-    sessionStorage.removeItem(pendingKey);
-    const timestamp = Number(value);
-    return value !== null && Number.isFinite(timestamp) && timestamp <= Date.now() && Date.now() - timestamp < 10 * 60 * 1000;
-  } catch { return false; }
-}
 function desktopNotes(): ReleaseNotes {
   return releases.desktop[desktopVersion] ?? { kind: 'desktop', version: desktopVersion, title: `BluviBoard для Windows ${desktopVersion}`, notes: 'Описание этой версии доступно на странице релиза Windows-клиента.' };
+}
+export function releaseHistory(): ReleaseNotes[] {
+  const web = releases.webHistory;
+  if (!isDesktop) return web;
+  const desktop = Object.values(releases.desktop).filter((entry) => !newer(entry.version, desktopVersion))
+    .sort((a, b) => newer(a.version, b.version) ? -1 : newer(b.version, a.version) ? 1 : 0);
+  if (!desktop.some((entry) => entry.version === desktopVersion)) desktop.unshift(desktopNotes());
+  return [...web, ...desktop.slice(0, 3)];
 }
 function startup() {
   const entries: ReleaseNotes[] = [];
   const previous = read(webKey);
-  const requested = pendingUpdate();
+  // A legacy update-click marker must not reopen an already acknowledged release.
+  try { sessionStorage.removeItem(pendingKey); } catch { /* Storage may be unavailable. */ }
   const reopening = isDesktop || window.matchMedia('(display-mode: standalone)').matches || !!(navigator as Navigator & { standalone?: boolean }).standalone ||
     (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type === 'reload';
-  const awaitingSession = !requested && !validVersion(previous) && !reopening;
-  if (requested || (validVersion(previous) ? newer(appVersion, previous) : reopening)) entries.push(releases.web);
+  const awaitingSession = !validVersion(previous) && !reopening;
+  if (validVersion(previous) ? newer(appVersion, previous) : reopening) entries.push(releases.web);
   if (isDesktop) {
     const installed = read(desktopKey);
     if (validVersion(installed) && newer(desktopVersion, installed)) entries.push(desktopNotes());
