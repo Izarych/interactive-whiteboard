@@ -181,10 +181,12 @@ test('drawing tools, autosave, undo/redo, independent boards, reload and deletio
     await page.keyboard.press('Escape');
     await draw(page, [150, 160], [340, 230]);
     await expect(page.getByText('1 объектов', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Прямоугольник', exact: true }).click();
+    await page.getByRole('button', { name: 'Фигуры', exact: true }).click();
+    await page.getByRole('group', { name: 'Выбор фигуры' }).getByRole('button', { name: 'Прямоугольник', exact: true }).click();
     await page.keyboard.press('Escape');
     await draw(page, [400, 180], [580, 330]);
-    await page.getByRole('button', { name: 'Эллипс', exact: true }).click();
+    await page.getByRole('button', { name: 'Фигуры', exact: true }).click();
+    await page.getByRole('group', { name: 'Выбор фигуры' }).getByRole('button', { name: 'Овал', exact: true }).click();
     await page.keyboard.press('Escape');
     await draw(page, [620, 200], [790, 340]);
     await expect(page.getByText('3 объектов', { exact: true })).toBeVisible();

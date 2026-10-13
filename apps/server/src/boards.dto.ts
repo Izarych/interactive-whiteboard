@@ -24,7 +24,7 @@ class BaseElementDto {
   @IsUUID('4')
   id: string;
 
-  @IsIn(['stroke', 'rectangle', 'ellipse', 'image'])
+  @IsIn(['stroke', 'rectangle', 'ellipse', 'triangle', 'line', 'arrow', 'trapezoid', 'parallelepiped', 'image'])
   kind: DrawingElement['kind'];
 }
 
@@ -33,7 +33,7 @@ class DrawnElementDto extends BaseElementDto {
   @IsUUID('4')
   groupId?: string;
 
-  @IsIn(['stroke', 'rectangle', 'ellipse'])
+  @IsIn(['stroke', 'rectangle', 'ellipse', 'triangle', 'line', 'arrow', 'trapezoid', 'parallelepiped'])
   declare kind: DrawnElement['kind'];
 
   @IsHexColor()
@@ -119,6 +119,11 @@ class BoardDocumentDto {
         { name: 'stroke', value: DrawnElementDto },
         { name: 'rectangle', value: DrawnElementDto },
         { name: 'ellipse', value: DrawnElementDto },
+        { name: 'triangle', value: DrawnElementDto },
+        { name: 'line', value: DrawnElementDto },
+        { name: 'arrow', value: DrawnElementDto },
+        { name: 'trapezoid', value: DrawnElementDto },
+        { name: 'parallelepiped', value: DrawnElementDto },
         { name: 'image', value: ImageElementDto },
       ],
     },

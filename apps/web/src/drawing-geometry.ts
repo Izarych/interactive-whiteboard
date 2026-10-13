@@ -49,6 +49,7 @@ function fitsPolygon(points: Point[], polygon: Point[], tolerance: number) {
 /** Keep an unrecognised gesture intact; the caller only refines explicitly modified gestures. */
 export function improveShape(element: DrawnElement): DrawnElement {
   if (element.kind !== 'stroke') {
+    if (element.kind !== 'rectangle' && element.kind !== 'ellipse') return element;
     const [x, y, endX, endY] = element.points;
     const size = Math.max(Math.abs(endX - x), Math.abs(endY - y));
     return { ...element, points: [x, y, x + (endX < x ? -size : size), y + (endY < y ? -size : size)] };
@@ -111,14 +112,31 @@ export function improveShape(element: DrawnElement): DrawnElement {
   return element;
 }
 
-export function outline(element: DrawnElement): Point[] {
-  if (element.kind === 'stroke') return pairs(element.points);
+export function outlines(element: DrawnElement): Point[][] {
+  if (element.kind === 'stroke') return [pairs(element.points)];
   const [x, y, endX, endY] = element.points;
-  if (element.kind === 'rectangle') return [[x, y], [endX, y], [endX, endY], [x, endY], [x, y]];
+  if (element.kind === 'line') return [[[x, y], [endX, endY]]];
+  if (element.kind === 'arrow') {
+    const length = Math.hypot(endX - x, endY - y);
+    if (length < EPS) return [[[x, y], [endX, endY]]];
+    const dx = (endX - x) / length, dy = (endY - y) / length;
+    const head = Math.min(Math.max(12, element.width * 3), length * .35);
+    return [[[x, y], [endX, endY]], [[endX - dx * head - dy * head / 2, endY - dy * head + dx * head / 2], [endX, endY], [endX - dx * head + dy * head / 2, endY - dy * head - dx * head / 2]]];
+  }
+  const left = Math.min(x, endX), top = Math.min(y, endY), w = Math.abs(endX - x), h = Math.abs(endY - y);
+  if (element.kind === 'triangle') return [[[left + w / 2, top], [left + w, top + h], [left, top + h], [left + w / 2, top]]];
+  if (element.kind === 'trapezoid') return [[[left + w * .2, top], [left + w * .8, top], [left + w, top + h], [left, top + h], [left + w * .2, top]]];
+  if (element.kind === 'parallelepiped') {
+    const dx = w * .25, dy = h * .25;
+    const front: Point[] = [[left, top + dy], [left + w - dx, top + dy], [left + w - dx, top + h], [left, top + h]];
+    const back: Point[] = front.map(([x, y]) => [x + dx, y - dy]);
+    return [[...front, front[0]], [...back, back[0]], ...front.map((point, i) => [point, back[i]])];
+  }
+  if (element.kind === 'rectangle') return [[[x, y], [endX, y], [endX, endY], [x, endY], [x, y]]];
   const rx = Math.abs(endX - x) / 2, ry = Math.abs(endY - y) / 2;
   const cx = (x + endX) / 2, cy = (y + endY) / 2;
   const count = Math.max(32, Math.min(2048, Math.ceil(Math.PI * Math.sqrt(Math.max(rx, ry) / .4))));
-  return Array.from({ length: count + 1 }, (_, i) => [cx + rx * Math.cos(i * Math.PI * 2 / count), cy + ry * Math.sin(i * Math.PI * 2 / count)]);
+  return [Array.from({ length: count + 1 }, (_, i) => [cx + rx * Math.cos(i * Math.PI * 2 / count), cy + ry * Math.sin(i * Math.PI * 2 / count)])];
 }
 
 type Interval = [number, number];
@@ -162,43 +180,46 @@ function cuts(a: Point, b: Point, from: Point, to: Point, radius: number): Inter
 
 export function touchesOutline(element: DrawnElement, from: Point, to: Point, radius: number) {
   if (!nearEraser(element, from, to, radius)) return false;
-  const points = outline(element);
-  return points.slice(1).some((p, i) => cuts(points[i], p, from, to, radius + element.width / 2).length > 0);
+  return outlines(element).some((points) => points.slice(1).some((p, i) => cuts(points[i], p, from, to, radius + element.width / 2).length > 0));
 }
 
 export function eraseOutline(element: DrawnElement, from: Point, to: Point, radius: number): DrawnElement[] {
   if (!nearEraser(element, from, to, radius)) return [element];
-  const points = outline(element);
   const fragments: Point[][] = [];
-  let current: Point[] = [], changed = false;
-  const flush = () => { if (current.length) fragments.push(current); current = []; };
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1], b = points[i];
-    const removed = cuts(a, b, from, to, radius + element.width / 2);
-    changed ||= removed.length > 0;
-    let start = 0;
-    for (const [left, right] of [...removed, [1, 1] as Interval]) {
-      if (left - start > EPS) {
-        const first = at(a, b, start), last = at(a, b, left);
-        if (current.length && distance(current.at(-1)!, first) > EPS) flush();
-        if (!current.length) current.push(first);
-        current.push(last);
+  let changed = false;
+  for (const points of outlines(element)) {
+    const pathFragments: Point[][] = [];
+    let current: Point[] = [];
+    const flush = () => { if (current.length) pathFragments.push(current); current = []; };
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1], b = points[i];
+      const removed = cuts(a, b, from, to, radius + element.width / 2);
+      changed ||= removed.length > 0;
+      let start = 0;
+      for (const [left, right] of [...removed, [1, 1] as Interval]) {
+        if (left - start > EPS) {
+          const first = at(a, b, start), last = at(a, b, left);
+          if (current.length && distance(current.at(-1)!, first) > EPS) flush();
+          if (!current.length) current.push(first);
+          current.push(last);
+        }
+        if (right > left) flush();
+        start = right;
       }
-      if (right > left) flush();
-      start = right;
     }
+    flush();
+    // Rejoin the two ends of a closed contour if the cut happened elsewhere on it.
+    if (pathFragments.length > 1 && distance(points[0], points.at(-1)!) < EPS && distance(pathFragments.at(-1)!.at(-1)!, pathFragments[0][0]) < EPS) {
+      pathFragments[0] = [...pathFragments.pop()!.slice(0, -1), ...pathFragments[0]];
+    }
+    fragments.push(...pathFragments);
   }
-  flush();
   if (!changed) return [element];
-  // Rejoin the two ends of a closed contour if the cut happened elsewhere on it.
-  if (fragments.length > 1 && distance(points[0], points.at(-1)!) < EPS && distance(fragments.at(-1)!.at(-1)!, fragments[0][0]) < EPS) {
-    fragments[0] = [...fragments.pop()!.slice(0, -1), ...fragments[0]];
-  }
   return fragments.map((fragment, i) => ({ ...element, id: i === 0 ? element.id : crypto.randomUUID(), groupId: element.groupId ?? element.id, kind: 'stroke', points: (fragment.length === 1 ? [fragment[0], fragment[0]] : fragment).flat() }));
 }
 
 function nearEraser(element: DrawnElement, from: Point, to: Point, radius: number) {
-  const box = bounds(pairs(element.points)), padding = radius + element.width / 2;
+  const box = bounds(element.kind === 'arrow' ? outlines(element).flat() : pairs(element.points)), padding = radius + element.width / 2;
   return box.right >= Math.min(from[0], to[0]) - padding && box.left <= Math.max(from[0], to[0]) + padding &&
     box.bottom >= Math.min(from[1], to[1]) - padding && box.top <= Math.max(from[1], to[1]) + padding;
 }

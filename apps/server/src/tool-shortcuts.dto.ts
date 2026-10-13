@@ -15,6 +15,7 @@ export class ToolShortcutsDto {
   @IsOptional() @ValidateNested() @Type(() => ToolShortcutDto) pen?: ToolShortcutDto;
   @IsOptional() @ValidateNested() @Type(() => ToolShortcutDto) highlighter?: ToolShortcutDto;
   @IsOptional() @ValidateNested() @Type(() => ToolShortcutDto) eraser?: ToolShortcutDto;
+  @IsOptional() @ValidateNested() @Type(() => ToolShortcutDto) shapes?: ToolShortcutDto;
   @IsOptional() @ValidateNested() @Type(() => ToolShortcutDto) rectangle?: ToolShortcutDto;
   @IsOptional() @ValidateNested() @Type(() => ToolShortcutDto) ellipse?: ToolShortcutDto;
   @IsOptional() @ValidateNested() @Type(() => ToolShortcutDto) hand?: ToolShortcutDto;

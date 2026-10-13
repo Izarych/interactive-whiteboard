@@ -1,14 +1,15 @@
 import { memo, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { Circle, Ellipse, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from 'react-konva';
+import { Circle, Ellipse, Image as KonvaImage, Layer, Line, Rect, Shape, Stage, Text, Transformer } from 'react-konva';
 import type Konva from 'konva';
-import type { BoardBackground, DrawnElement, DrawingElement, DrawingTool, ImageElement } from '@whiteboard/shared';
+import type { BoardBackground, DrawnElement, DrawingElement, DrawingTool, FigureKind, ImageElement } from '@whiteboard/shared';
 import { loadImage } from './images';
 import { backgroundImages } from './background';
-import { eraseOutline, improveShape, touchesOutline } from './drawing-geometry';
+import { eraseOutline, improveShape, outlines, touchesOutline } from './drawing-geometry';
 import type { Point } from './drawing-geometry';
 import { modifierHeld } from './drawing-settings';
 import type { ShapeModifier } from './drawing-settings';
 import { appendStrokePoints, pointerSamples } from './drawing-input';
+import { figureElement } from './figures';
 
 export type Tool = DrawingTool;
 export interface CanvasHandle { finish: () => void; zoomIn: () => void; zoomOut: () => void; resetView: () => void }
@@ -17,6 +18,7 @@ interface Props {
   elements: DrawingElement[];
   background: BoardBackground;
   tool: Tool;
+  figure?: FigureKind;
   color: string;
   width: number;
   opacity?: number;
@@ -33,6 +35,19 @@ const Element = memo(function Element({ element, preview = false }: { element: D
   const { points: p, color, width } = element;
   const common = { id: preview ? undefined : element.id, listening: !preview, stroke: color, strokeWidth: width, opacity: element.opacity ?? 1, hitStrokeWidth: Math.max(14, width) };
   if (element.kind === 'stroke') return <Line {...common} points={p} lineCap="round" lineJoin="round" />;
+  if (element.kind !== 'rectangle' && element.kind !== 'ellipse') {
+    const paths = outlines(element), points = paths.flat();
+    const left = Math.min(...points.map((p) => p[0])), top = Math.min(...points.map((p) => p[1]));
+    const right = Math.max(...points.map((p) => p[0])), bottom = Math.max(...points.map((p) => p[1]));
+    return <Shape {...common} x={left} y={top} width={right - left} height={bottom - top} lineCap="round" lineJoin="round" sceneFunc={(context, shape) => {
+      context.beginPath();
+      for (const path of paths) {
+        context.moveTo(path[0][0] - left, path[0][1] - top);
+        for (const [x, y] of path.slice(1)) context.lineTo(x - left, y - top);
+      }
+      context.strokeShape(shape);
+    }} />;
+  }
   const x = Math.min(p[0], p[2]);
   const y = Math.min(p[1], p[3]);
   const w = Math.abs(p[2] - p[0]);
@@ -84,14 +99,14 @@ const Scene = memo(function Scene({ elements, selectable, onImageChange }: {
   </Layer>;
 });
 
-export function Canvas({ elements, background, tool, color, width, opacity = 1, eraserWidth = 24, shapeModifier = 'Shift', onChange, stageRef, selectedImageId, onSelectImage, onImageFiles, canvasRef }: Props) {
+export function Canvas({ elements, background, tool, figure = 'rectangle', color, width, opacity = 1, eraserWidth = 24, shapeModifier = 'Shift', onChange, stageRef, selectedImageId, onSelectImage, onImageFiles, canvasRef }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 1, height: 1 });
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
   const [draft, setDraft] = useState<DrawnElement | null>(null);
   const [erasedPreview, setErasedPreview] = useState<DrawingElement[] | null>(null);
   const [eraserPosition, setEraserPosition] = useState<Point | null>(null);
-  const gesture = useRef<{ pointerId: number; element: DrawnElement | null; erasing: DrawingElement[] | null; baseIds: Set<string>; pan: boolean; snap: boolean; last: Point; radius: number } | null>(null);
+  const gesture = useRef<{ pointerId: number; element: DrawnElement | null; figure: FigureKind | null; erasing: DrawingElement[] | null; baseIds: Set<string>; pan: boolean; snap: boolean; last: Point; radius: number } | null>(null);
   const keyboardModifier = useRef<boolean | null>(null);
   const draftFrame = useRef<number | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
@@ -109,7 +124,7 @@ export function Canvas({ elements, background, tool, color, width, opacity = 1, 
       const active = gesture.current;
       if (!active?.element) return;
       const snapshot = { ...active.element, points: [...active.element.points] };
-      setDraft(active.snap ? improveShape(snapshot) : snapshot);
+      setDraft(active.figure ? figureElement(snapshot, active.figure, active.snap) : active.snap ? improveShape(snapshot) : snapshot);
     });
   };
   useEffect(() => () => { if (draftFrame.current !== null) cancelAnimationFrame(draftFrame.current); }, []);
@@ -149,7 +164,7 @@ export function Canvas({ elements, background, tool, color, width, opacity = 1, 
     if (!active) return;
     if (draftFrame.current !== null) { cancelAnimationFrame(draftFrame.current); draftFrame.current = null; }
     gesture.current = null;
-    if (!cancelled && active.element) onChange([...elementsRef.current, active.snap ? improveShape(active.element) : active.element]);
+    if (!cancelled && active.element) onChange([...elementsRef.current, active.figure ? figureElement(active.element, active.figure, active.snap) : active.snap ? improveShape(active.element) : active.element]);
     if (!cancelled && active.erasing && (active.erasing.length !== active.baseIds.size || active.erasing.some((element, i) => element !== elementsRef.current[i]))) {
       onChange([...active.erasing, ...elementsRef.current.filter((element) => !active.baseIds.has(element.id))]);
     }
@@ -240,11 +255,12 @@ export function Canvas({ elements, background, tool, color, width, opacity = 1, 
           const p = point();
           if (!p) return;
           const pan = tool === 'hand' || event.evt.button === 1;
+          const selectedFigure = tool === 'shapes' ? figure : tool === 'rectangle' ? 'rectangle' : tool === 'ellipse' ? 'oval' : null;
           const element: DrawnElement | null = !pan && tool !== 'eraser' ? {
-            id: crypto.randomUUID(), kind: tool === 'pen' || tool === 'highlighter' ? 'stroke' : tool === 'rectangle' ? 'rectangle' : 'ellipse',
+            id: crypto.randomUUID(), kind: selectedFigure ? figureElement({ id: '', kind: 'stroke', color, width, points: [...p, ...p] }, selectedFigure).kind : 'stroke',
             color, width, ...(opacity < 1 ? { opacity } : {}), points: [...p, ...p],
           } : null;
-          gesture.current = { pointerId: event.evt.pointerId, element, erasing: tool === 'eraser' && !pan ? [...elementsRef.current] : null,
+          gesture.current = { pointerId: event.evt.pointerId, element, figure: selectedFigure, erasing: tool === 'eraser' && !pan ? [...elementsRef.current] : null,
             baseIds: new Set(elementsRef.current.map((element) => element.id)), pan, snap: keyboardModifier.current ?? modifierHeld(event.evt, shapeModifier), last: p, radius: eraserWidth / 2 / view.scale };
           // Capture outside the stage so releasing beyond its border still commits the stroke.
           (event.evt.target as HTMLElement).setPointerCapture(event.evt.pointerId);

@@ -91,7 +91,7 @@ test('each clicked tool opens its own settings below the toolbar; hotkey switche
     expect((await context.request.put('/api/preferences/tools', { data: { shortcuts: { eraser: { code: 'CapsLock', ctrl: false, alt: false, shift: false, meta: false } } } })).ok()).toBe(true);
     await page.goto('/');
     await expect(page.getByTestId('canvas')).toBeVisible();
-    for (const tool of ['Выделение', 'Карандаш', 'Маркер', 'Ластик', 'Прямоугольник', 'Эллипс', 'Рука']) {
+    for (const tool of ['Выделение', 'Карандаш', 'Маркер', 'Ластик', 'Фигуры', 'Рука']) {
       await page.getByRole('button', { name: tool, exact: true }).click();
       const settings = page.getByRole('dialog', { name: `Настройки: ${tool}`, exact: true });
       await expect(settings).toBeVisible();
@@ -117,7 +117,7 @@ test('each clicked tool opens its own settings below the toolbar; hotkey switche
     await expect(page.getByRole('button', { name: 'Маркер', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.setViewportSize({ width: 360, height: 800 });
-    for (const tool of ['Выделение', 'Карандаш', 'Маркер', 'Ластик', 'Прямоугольник', 'Эллипс', 'Рука']) {
+    for (const tool of ['Выделение', 'Карандаш', 'Маркер', 'Ластик', 'Фигуры', 'Рука']) {
       await page.getByRole('button', { name: tool, exact: true }).click();
       const bounds = (await page.getByRole('dialog', { name: `Настройки: ${tool}`, exact: true }).boundingBox())!;
       expect(bounds.x).toBeGreaterThanOrEqual(0);

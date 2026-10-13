@@ -1,6 +1,7 @@
-import type { DrawingTool, ImageElement } from '@whiteboard/shared';
+import type { DrawingTool, FigureKind, ImageElement } from '@whiteboard/shared';
 import { shapeModifiers } from './drawing-settings';
 import type { ShapeModifier } from './drawing-settings';
+import { FigurePicker } from './FigurePicker';
 
 export const drawingColors = ['#202938', '#64748b', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6'];
 export function ColorPalette({ color, onChange }: { color: string; onChange: (value: string) => void }) {
@@ -9,15 +10,17 @@ export function ColorPalette({ color, onChange }: { color: string; onChange: (va
   </div>;
 }
 
-export function ToolSettings({ tool, label, color, width, opacity, eraserWidth, modifier, selectedImage, onColor, onWidth, onOpacity, onEraserWidth, onModifier, onDeleteImage, onZoomIn, onZoomOut, onResetView }: {
+export function ToolSettings({ tool, label, figure, color, width, opacity, eraserWidth, modifier, selectedImage, onFigure, onColor, onWidth, onOpacity, onEraserWidth, onModifier, onDeleteImage, onZoomIn, onZoomOut, onResetView }: {
   tool: DrawingTool; label: string; color: string; width: number; opacity: number; eraserWidth: number; modifier: ShapeModifier; selectedImage: ImageElement | null;
+  figure: FigureKind; onFigure: (figure: FigureKind) => void;
   onColor: (value: string) => void; onWidth: (value: number) => void; onOpacity: (value: number) => void; onEraserWidth: (value: number) => void;
   onModifier: (value: ShapeModifier) => void; onDeleteImage: () => void; onZoomIn: () => void; onZoomOut: () => void; onResetView: () => void;
 }) {
-  const drawing = ['pen', 'highlighter', 'rectangle', 'ellipse'].includes(tool);
+  const drawing = ['pen', 'highlighter', 'shapes', 'rectangle', 'ellipse'].includes(tool);
   const widthLabel = tool === 'pen' ? 'Толщина карандаша' : tool === 'highlighter' ? 'Толщина маркера' : 'Толщина контура';
   return <section id={`tool-settings-${tool}`} className={`editor-popover tool-settings ${['select', 'pen', 'highlighter'].includes(tool) ? 'tool-settings--left' : ''}`} role="dialog" aria-label={`Настройки: ${label}`}>
     <h2>{label}</h2>
+    {tool === 'shapes' && <FigurePicker value={figure} onChange={onFigure} />}
     {drawing && <>
       <ColorPalette color={color} onChange={onColor} />
       <label className="width-control">Толщина<input aria-label={widthLabel} type="range" min={tool === 'highlighter' ? 4 : 1} max={tool === 'highlighter' ? 64 : 32} value={width} onChange={(event) => onWidth(Number(event.target.value))} /><span>{width}</span></label>

@@ -95,10 +95,12 @@ test('combination hotkeys finish active strokes, return to the prior tool, and r
     await expect(page.getByText('1 объектов', { exact: true })).toBeVisible();
     await page.keyboard.press('Control+F1');
     await expect(page.getByRole('button', { name: 'Карандаш', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await page.getByRole('button', { name: 'Эллипс', exact: true }).click();
+    await page.getByRole('button', { name: 'Фигуры', exact: true }).click();
+    await page.getByRole('group', { name: 'Выбор фигуры' }).getByRole('button', { name: 'Овал', exact: true }).click();
+    await page.keyboard.press('Escape');
     await page.keyboard.press('Control+F1');
     await page.keyboard.press('Control+F1');
-    await expect(page.getByRole('button', { name: 'Эллипс', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Фигуры', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await page.getByRole('button', { name: 'Ластик', exact: true }).click({ button: 'right' });
     const input = page.getByRole('textbox', { name: 'Хоткей: Ластик', exact: true });
     await input.focus();

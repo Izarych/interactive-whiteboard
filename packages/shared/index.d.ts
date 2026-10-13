@@ -2,7 +2,7 @@ export interface DrawnElement {
   id: string;
   /** Fragments of an erased contour can still be deleted as one object. */
   groupId?: string;
-  kind: 'stroke' | 'rectangle' | 'ellipse';
+  kind: 'stroke' | 'rectangle' | 'ellipse' | 'triangle' | 'line' | 'arrow' | 'trapezoid' | 'parallelepiped';
   color: string;
   width: number;
   /** Highlighter strokes use partial opacity; legacy drawings default to 1. */
@@ -23,7 +23,8 @@ export interface ImageElement {
 
 export type DrawingElement = DrawnElement | ImageElement;
 
-export type DrawingTool = 'pen' | 'highlighter' | 'eraser' | 'rectangle' | 'ellipse' | 'hand' | 'select';
+export type FigureKind = 'triangle' | 'square' | 'rectangle' | 'circle' | 'oval' | 'line' | 'arrow' | 'trapezoid' | 'parallelepiped';
+export type DrawingTool = 'pen' | 'highlighter' | 'eraser' | 'shapes' | 'rectangle' | 'ellipse' | 'hand' | 'select';
 export interface ToolShortcut {
   code: string;
   ctrl: boolean;
