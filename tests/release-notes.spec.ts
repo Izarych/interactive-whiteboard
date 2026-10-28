@@ -3,13 +3,22 @@ import { version as appVersion } from '../apps/web/package.json';
 import { version as nativeVersion } from '../apps/desktop/package.json';
 import { cleanupWorkspaces } from './asset-test-utils.cjs';
 import { registerDifferentBuild, cleanupWorkerFixtures } from './pwa-test-utils.cjs';
+import { readdirSync, readFileSync } from 'node:fs';
 
 test.afterEach(cleanupWorkerFixtures);
 
 const webKey = 'bluviboard:release-seen';
 const nativeKey = 'bluviboard:desktop-release-seen';
 const pendingKey = 'bluviboard:release-after-update';
-const historyTitles = [`BluviBoard ${appVersion}`, 'BluviBoard 1.4.0', 'BluviBoard 1.3.3'];
+const compareVersions = (a: string, b: string) => {
+  const left = a.split('.').map(Number), right = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) if (left[i] !== right[i]) return left[i] - right[i];
+  return 0;
+};
+const historyVersions = readdirSync('docs/releases').filter(name => /^\d+\.\d+\.\d+\.md$/.test(name)).map(name => name.slice(0, -3))
+  .filter(version => compareVersions(version, appVersion) <= 0).sort((a, b) => compareVersions(b, a)).slice(0, 3);
+const historyTitles = historyVersions.map(version => `BluviBoard ${version}`);
+const historySections = historyVersions.map(version => readFileSync(`docs/releases/${version}.md`, 'utf8').match(/^## (.+)$/m)![1]);
 
 test('a newer browser version shows bundled notes, remembers dismissal, and allows reopening on mobile', async ({ page }) => {
   await page.goto('/');
@@ -21,7 +30,7 @@ test('a newer browser version shows bundled notes, remembers dismissal, and allo
   await expect(dialog.locator('article > h3')).toHaveText(historyTitles);
   await expect(dialog).not.toContainText('Последние три версии BluviBoard — от новой к старым');
   await expect(dialog).not.toContainText('BluviBoard 1.1.1');
-  await expect(dialog).toContainText('Флажок закрепления настроек');
+  await expect(dialog).toContainText(historySections[0]);
   await expect(page.locator('.pwa-app')).toHaveAttribute('inert', '');
   await page.keyboard.press('Shift+Tab');
   await expect(dialog.getByRole('button', { name: 'Понятно', exact: true })).toBeFocused();
@@ -47,7 +56,7 @@ test('a newer browser version shows bundled notes, remembers dismissal, and allo
   await history.focus();
   await page.keyboard.press('Control+End');
   await expect.poll(() => history.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
-  await expect(dialog).toContainText('Работа при сбоях связи');
+  await expect(dialog).toContainText(historySections.at(-1)!);
   await page.screenshot({ path: 'test-results/release-notes-mobile.png', fullPage: true });
   await dialog.getByRole('button', { name: 'Понятно', exact: true }).click();
   await expect(dialog).toHaveCount(0);
@@ -129,7 +138,7 @@ test('notes remain readable without the API and dismissal falls back to session 
     await page.goto('/');
     const dialog = page.getByRole('dialog', { name: 'Что нового', exact: true });
     await expect(dialog).toContainText(`BluviBoard ${appVersion}`);
-    await expect(dialog).toContainText('Флажок закрепления настроек');
+    await expect(dialog).toContainText(historySections[0]);
     await expect(dialog.locator('article > h3')).toHaveText(historyTitles);
     await dialog.getByRole('button', { name: 'Понятно', exact: true }).click();
     expect(await page.evaluate((key) => sessionStorage.getItem(key), webKey)).toBe(appVersion);
