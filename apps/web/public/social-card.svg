@@ -9,10 +9,10 @@
   <rect x="72" y="76" width="72" height="72" rx="21" fill="url(#blue)"/>
   <path d="M98 95V131M98 95H110C125 95 125 112 110 112H98M98 112H112C128 112 128 131 112 131H98" fill="none" stroke="white" stroke-width="6" stroke-linecap="round"/>
   <text x="165" y="125" font-family="DejaVu Sans,Arial,sans-serif" font-size="43" font-weight="700" fill="#202938">BluviBoard</text>
-  <text x="72" y="260" font-family="DejaVu Sans,Arial,sans-serif" font-size="49" font-weight="700" fill="#202938">Место для вашей</text>
-  <text x="72" y="325" font-family="DejaVu Sans,Arial,sans-serif" font-size="49" font-weight="700" fill="#2563eb">следующей идеи</text>
-  <text x="75" y="386" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" fill="#7d879b">Рисунки, заметки и скриншоты</text>
-  <text x="75" y="424" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" fill="#7d879b">в одном пространстве.</text>
+   <text x="72" y="260" font-family="DejaVu Sans,Arial,sans-serif" font-size="49" font-weight="700" fill="#202938">Онлайн-доска</text>
+   <text x="72" y="325" font-family="DejaVu Sans,Arial,sans-serif" font-size="49" font-weight="700" fill="#2563eb">для учёбы</text>
+   <text x="75" y="386" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" fill="#7d879b">Задачи, схемы и конспекты от руки.</text>
+   <text x="75" y="424" font-family="DejaVu Sans,Arial,sans-serif" font-size="22" fill="#7d879b">Клетка, фигуры и экспорт PNG.</text>
   <rect x="74" y="481" width="210" height="48" rx="15" fill="#2563eb"/>
   <text x="98" y="512" font-family="DejaVu Sans,Arial,sans-serif" font-size="21" fill="white">bluviboard.ru</text>
   <rect x="660" y="100" width="462" height="420" rx="25" fill="#fff" stroke="#dde5f2"/>

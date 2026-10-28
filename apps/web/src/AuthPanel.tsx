@@ -112,7 +112,7 @@ export function AuthPanel({ session, initialMode = 'login', initialEmail = '', o
   const Heading = publicPage ? 'h2' : 'h1';
   return <div className={`auth-shell ${onClose ? 'auth-shell--modal' : ''} ${publicPage ? 'auth-shell--public' : ''}`}>
     {publicPage && <PublicIntro />}
-    <section className="auth-card" role={onClose ? 'dialog' : undefined} aria-modal={onClose ? true : undefined} aria-label="Вход и регистрация">
+    <section id={publicPage ? 'start' : undefined} className="auth-card" role={onClose ? 'dialog' : undefined} aria-modal={onClose ? true : undefined} aria-label="Вход и регистрация">
       {onClose && <button className="modal-close" type="button" aria-label="Вернуться к доске" disabled={busy} onClick={onClose}>×</button>}
       <div className="auth-brand"><img src="/favicon.svg" alt="" /><span>Bluvi<span>Board</span></span></div>
       {!adminOnly && ['login', 'register'].includes(mode) && <div className="auth-tabs">
@@ -128,7 +128,7 @@ export function AuthPanel({ session, initialMode = 'login', initialEmail = '', o
             <label className="form-label">Имя<input name="name" autoComplete="name" maxLength={80} autoFocus required value={name} onChange={(event) => setName(event.target.value)} /></label>
             <AvatarPicker name={name} file={avatar} onChange={setAvatar} onRemove={() => setAvatar(null)} onError={setError} />
           </>}
-          {['login', 'register', 'forgot'].includes(mode) && <label className="form-label">Почта<input name="email" type="email" autoComplete="email" autoFocus={mode !== 'register'} maxLength={254} required value={email} onChange={(event) => setEmail(event.target.value)} /></label>}
+          {['login', 'register', 'forgot'].includes(mode) && <label className="form-label">Почта<input name="email" type="email" autoComplete="email" autoFocus={mode !== 'register' && (!publicPage || window.location.hash === '#start')} maxLength={254} required value={email} onChange={(event) => setEmail(event.target.value)} /></label>}
           {['verify', 'reset'].includes(mode) && <label className="form-label">Код из письма<input className="code-input" name="code" inputMode="numeric" autoComplete="one-time-code" autoFocus pattern="[0-9]{6}" minLength={6} maxLength={6} required value={code}
             onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} /></label>}
           {['login', 'register', 'reset'].includes(mode) && <label className="form-label">{mode === 'reset' ? 'Новый пароль' : 'Пароль'}

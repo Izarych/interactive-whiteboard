@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="540" viewBox="0 0 720 540">
+  <title>Прямоугольник на клетчатом фоне</title>
+  <defs><pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M48 0H0V48" fill="none" stroke="#d7e2f0" stroke-width="1.5"/></pattern></defs>
+  <rect width="720" height="540" fill="#ffffff"/>
+  <rect width="720" height="540" fill="url(#grid)"/>
+  <path d="M192 144H480V336H192Z" fill="#6366f10c" stroke="#6366f1" stroke-width="4" stroke-linejoin="round"/>
+  <g font-family="system-ui, sans-serif" fill="#202938" text-anchor="middle">
+    <text x="336" y="112" font-size="25">6 клеток</text>
+    <text x="570" y="246" font-size="25">4 клетки</text>
+    <path d="M194 430h280" stroke="#facc15" stroke-width="36" stroke-linecap="round" opacity=".4"/>
+    <text x="336" y="440" font-size="32">S = 6 × 4 = 24</text>
+    <text x="360" y="505" font-size="18" fill="#626e83">Клетка — ориентир для вашего рисунка</text>
+  </g>
+</svg>

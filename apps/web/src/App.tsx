@@ -71,7 +71,7 @@ function App({ releaseNotesOpen = false }: { releaseNotesOpen?: boolean }) {
 
   if (!session) return <main className={`auth-shell ${admin ? '' : 'auth-shell--public'}`} inert={releaseNotesOpen}>
     {!admin && <PublicIntro />}
-    <section className="auth-card auth-loading">
+    <section id="start" className="auth-card auth-loading">
       <img src="/favicon.svg" width="64" height="64" alt="BluviBoard" />
       <p>{bootError || 'Открываем ваше пространство…'}</p>
       {bootError && <button className="primary-button" onClick={() => { void load(); }}>Попробовать снова</button>}

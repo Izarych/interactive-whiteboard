@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="540" viewBox="0 0 720 540">
+  <title>Пример учебной схемы</title>
+  <rect width="720" height="540" rx="20" fill="#ffffff"/>
+  <g fill="#cdd9ec"><circle cx="40" cy="40" r="2"/><circle cx="64" cy="40" r="2"/><circle cx="88" cy="40" r="2"/></g>
+  <g font-family="system-ui, sans-serif" fill="#202938">
+    <text x="48" y="102" font-size="22" font-weight="600">Уравнение</text>
+    <g font-size="32"><text x="48" y="160">2x + 6 = 14</text><text x="48" y="218">2x = 8</text></g>
+    <path d="M44 260h135" stroke="#facc15" stroke-width="30" stroke-linecap="round" opacity=".4"/>
+    <text x="48" y="270" font-size="32">x = 4</text>
+    <text x="380" y="102" font-size="22" font-weight="600">Геометрия</text>
+    <path d="M380 290 620 290 460 146Z" fill="none" stroke="#6366f1" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M460 146V290" stroke="#94a3b8" stroke-width="2" stroke-dasharray="8 6"/>
+    <path d="M460 276h14v14" fill="none" stroke="#94a3b8" stroke-width="2"/>
+    <text x="480" y="232" font-size="24">3</text><text x="492" y="326" font-size="24">4</text>
+    <text x="380" y="388" font-size="26">S = 4 × 3 ÷ 2 = 6</text>
+    <path d="M48 440H672" stroke="#e1e7f2" stroke-width="2"/>
+    <text x="48" y="487" font-size="18" fill="#626e83">Решайте по шагам · Выделяйте главное</text>
+  </g>
+</svg>

@@ -6,6 +6,8 @@ import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Plugin } from 'vite';
 
+const guidePages = ['dlya-ucheby', 'doska-v-kletku'];
+
 function releaseNotes(version: string, desktop = false) {
   if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Invalid release version');
   const text = readFileSync(new URL(`../../docs/releases/${desktop ? 'desktop/' : ''}${version}.md`, import.meta.url), 'utf8').trim();
@@ -46,6 +48,7 @@ function applicationBuildId() {
   directory(fileURLToPath(new URL('./src/', import.meta.url)), 'src');
   directory(fileURLToPath(new URL('./public/', import.meta.url)), 'public');
   for (const name of ['index.html', 'package.json', 'vite.config.ts', '../../package-lock.json', '../../apps/desktop/package.json']) add(fileURLToPath(new URL(name, import.meta.url)), name);
+  for (const name of guidePages) add(fileURLToPath(new URL(`./${name}/index.html`, import.meta.url)), `${name}/index.html`);
   hash.update(JSON.stringify({ web: releaseNotes(webVersion), webHistory, desktop: desktopReleases }));
   return hash.digest('hex').slice(0, 20);
 }
@@ -65,6 +68,11 @@ function pwaWorker(): Plugin {
 export default defineConfig({
   plugins: [react(), pwaWorker()],
   define: { __BLUVIBOARD_RELEASES__: JSON.stringify({ web: releaseNotes(webVersion), webHistory, desktop: desktopReleases }), __BLUVIBOARD_BUILD_ID__: JSON.stringify(buildId) },
+  build: {
+    rollupOptions: {
+      input: Object.fromEntries(['index', ...guidePages].map((name) => [name, fileURLToPath(new URL(name === 'index' ? './index.html' : `./${name}/index.html`, import.meta.url))])),
+    },
+  },
   server: {
     proxy: {
       '/api': process.env.API_PROXY_TARGET ?? 'http://localhost:3000',

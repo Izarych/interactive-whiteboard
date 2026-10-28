@@ -151,7 +151,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .profile-email small { color: #57a376; font-size: 11px; }
 .logout-link { color: #a0a6b4; }
 .auth-loading { text-align: center; font-size: 13px; color: #9298a6; }
-.auth-shell--public { gap: clamp(30px, 6vw, 100px); }
+.auth-shell--public { gap: clamp(30px, 6vw, 100px); align-items: safe center; }
 .public-intro { width: min(100%, 500px); padding: 24px 0; }
 .public-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 44px; font-size: 25px; font-weight: 750; letter-spacing: -.7px; }
 .public-brand img { width: 44px; height: 44px; }
@@ -164,6 +164,14 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .public-intro strong { display: block; font-size: 13px; font-weight: 600; }
 .public-intro small { display: block; margin-top: 5px; color: #939db0; font-size: 11px; }
 .public-intro .public-guest-note { font-size: 11px; color: #a0a9b9; }
+.public-start-link { display: inline-flex; padding: 12px 18px; border-radius: 10px; background: #6366f1; color: #fff; text-decoration: none; font-size: 13px; font-weight: 600; }
+.public-start-link:hover { background: #5154da; }
+.public-start-link:focus-visible { outline: 3px solid #a5b4fc; outline-offset: 3px; }
+.public-guides { display: grid; gap: 8px; margin: 20px 0; }
+.public-guides a { display: block; padding: 12px 14px; border: 1px solid #dce3f3; border-radius: 10px; color: #4f46d9; text-decoration: none; background: #ffffff80; }
+.public-guides a:hover { background: #fff; border-color: #a5b4fc; }
+.public-guides a:focus-visible { outline: 3px solid #a5b4fc; outline-offset: 3px; }
+.public-guides a span { display: block; margin-top: 5px; color: #72798b; font-size: 11px; line-height: 1.6; }
 @media (max-width: 900px) {
   .auth-shell--public { justify-content: flex-start; flex-direction: column; align-items: center; gap: 20px; }
   .public-intro { max-width: 440px; padding: 20px 4px 0; }

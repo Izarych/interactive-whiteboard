@@ -7,12 +7,16 @@ test('public landing has indexable metadata, crawl files and sharing image; priv
   try {
     const html = await (await context.request.get('/')).text();
     expect(html).toContain('itemtype="https://schema.org/WebApplication"');
-    expect(html).toContain('Онлайн-доска для идей и заметок');
+    expect(html).toContain('Онлайн-доска для учёбы и рисования');
     expect(html).toContain('rel="canonical" href="https://bluviboard.ru/"');
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'Онлайн-доска для идей и заметок' })).toBeVisible();
+    await expect(page).toHaveTitle('BluviBoard — онлайн-доска для учёбы и рисования');
+    await expect(page.getByRole('heading', { name: 'Онлайн-доска для учёбы и рисования' })).toBeVisible();
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'index, follow');
     await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', 'https://bluviboard.ru/og-image.png');
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /учёбы.*без регистрации/);
+    await expect(page.getByRole('navigation', { name: 'Как использовать BluviBoard' }).getByRole('link', { name: 'Доска для учёбы', exact: false })).toHaveAttribute('href', '/dlya-ucheby/');
+    await expect(page.getByRole('navigation', { name: 'Как использовать BluviBoard' }).getByRole('link', { name: 'Онлайн-доска в клетку', exact: false })).toHaveAttribute('href', '/doska-v-kletku/');
     const robots = await (await context.request.get('/robots.txt')).text();
     expect(robots).toContain('Disallow: /admin');
     expect(robots).toContain('Disallow: /api/');
@@ -49,13 +53,13 @@ test('public content remains visible and indexable while the session request is 
   try {
     await page.goto('/');
     await expect(page.getByText('Открываем ваше пространство…', { exact: true })).toBeVisible();
-    const heading = page.getByRole('heading', { level: 1, name: 'Онлайн-доска для идей и заметок' });
+    const heading = page.getByRole('heading', { level: 1, name: 'Онлайн-доска для учёбы и рисования' });
     await expect(heading).toBeVisible();
-    await expect(page.locator('[itemprop="description"]')).toContainText('Рисуйте, записывайте идеи');
+    await expect(page.locator('[itemprop="description"]')).toContainText('Решайте задачи, рисуйте схемы');
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'index, follow');
     await page.setViewportSize({ width: 360, height: 800 });
     await expect(heading).toBeVisible();
-    await expect(heading).toHaveText('Онлайн-доска для идей и заметок');
+    await expect(heading).toHaveText('Онлайн-доска для учёбы и рисования');
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(360);
     releaseSession();
     await expect(page.getByRole('button', { name: 'Продолжить как гость', exact: true })).toBeVisible();
@@ -78,10 +82,10 @@ test('public content survives blocked API requests and session retries; admin fa
   });
   await page.goto('/');
   const retry = page.getByRole('button', { name: 'Попробовать снова', exact: true });
-  const heading = page.getByRole('heading', { level: 1, name: 'Онлайн-доска для идей и заметок' });
+  const heading = page.getByRole('heading', { level: 1, name: 'Онлайн-доска для учёбы и рисования' });
   await expect(retry).toBeVisible();
   await expect(heading).toBeVisible();
-  await expect(page.locator('[itemprop="description"]')).toContainText('Рисуйте, записывайте идеи');
+  await expect(page.locator('[itemprop="description"]')).toContainText('Решайте задачи, рисуйте схемы');
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'index, follow');
   const failedRequests = sessionRequests;
   await retry.click();

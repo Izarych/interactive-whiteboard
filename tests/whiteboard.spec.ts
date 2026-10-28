@@ -263,7 +263,7 @@ test('square grid follows the camera, survives editing and reload, and stays ind
   page.on('dialog', (dialog) => dialog.accept());
   try {
     await page.goto('/');
-    await expect(page).toHaveTitle('BluviBoard — онлайн-доска для рисования и заметок');
+    await expect(page).toHaveTitle('BluviBoard — онлайн-доска для учёбы и рисования');
     await expect(page.locator('.brand-name')).toHaveText('BluviBoard');
     const icon = await request.get('/favicon.svg');
     expect(icon.status()).toBe(200);

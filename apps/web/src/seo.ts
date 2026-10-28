@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-export const PUBLIC_TITLE = 'BluviBoard — онлайн-доска для рисования и заметок';
+export const PUBLIC_TITLE = 'BluviBoard — онлайн-доска для учёбы и рисования';
 
 export function usePageMetadata(privatePage: boolean, admin: boolean) {
   useEffect(() => {
