@@ -66,7 +66,7 @@ export function BoardEditor(props: EditorProps) {
 function LocalEditor(props: EditorProps) { return <Editor {...props} sync={useBoard(props.initial, props.onSaved)} />; }
 function CollaborativeEditor(props: EditorProps) { return <Editor {...props} sync={useCollaborativeBoard(props.initial, props.onSaved, props.collaboration)} />; }
 function Editor({ initial, onCopy, editorRef, disabled, sidebarCollapsed, onToggleSidebar, onNewBoard, toolShortcuts, shortcutsReady, shortcutsError, onReloadShortcuts, onSaveShortcuts, panelPin, participant, collaboration, onCollaborative, sharingInitiallyOpen, sync }: EditorProps & {
-  sync: ReturnType<typeof useBoard> & { previews?: DrawnElement[]; preview?: (element: DrawnElement | null) => void; connected?: boolean; recoverySnapshot?: () => Board };
+  sync: ReturnType<typeof useBoard> & { previews?: DrawnElement[]; preview?: (element: DrawnElement | null, finished?: boolean) => void; connected?: boolean; recoverySnapshot?: () => Board };
 }) {
   const { board, edit, flush, status, error, draftWarning, snapshot } = sync;
   const [titleInput, setTitleInput] = useState(board.title);

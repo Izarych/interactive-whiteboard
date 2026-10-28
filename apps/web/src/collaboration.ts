@@ -3,6 +3,7 @@ import { applyOperation, difference } from '@whiteboard/shared/board-operations'
 
 export function boardUnavailable() { window.location.replace('/?board-unavailable=1'); }
 type Pending = { id: string; operation: BoardOperation };
+type Patch = { boardId: string; revision: number; baseRevision: number; updatedAt: string; operationId: string; operation: BoardOperation };
 export class Collaboration {
   private socket?: WebSocket;
   private retry?: number;
@@ -13,7 +14,9 @@ export class Collaboration {
   private remote: Board | null;
   private pending: Pending[] = [];
   private previewAt = 0;
-  private peers = new Map<string, { element: DrawnElement; time: number }>();
+  private peers = new Map<string, { peerId: string; element: DrawnElement; time: number; finished: boolean }>();
+  private patches = new Map<number, Patch>();
+  private syncTimer?: number;
   private key: string;
   private failures = 0;
   private lastReceived = Date.now();
@@ -37,6 +40,32 @@ export class Collaboration {
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   getState = () => this.state;
   private project() { return this.remote ? this.pending.reduce((board, p) => applyOperation(board, p.operation), this.remote) : null; }
+  private acknowledge(operationId: string) {
+    this.pending = this.pending.filter(p => p.id !== operationId);
+    if (this.sent === operationId) this.sent = null;
+  }
+  private drainPatches() {
+    if (!this.remote) return;
+    for (const [revision, patch] of [...this.patches].sort(([a], [b]) => a - b)) {
+      if (revision > this.remote.revision) {
+        if (patch.baseRevision !== this.remote.revision) break;
+        this.remote = { ...applyOperation(this.remote, patch.operation), revision, updatedAt: patch.updatedAt };
+      }
+      this.acknowledge(patch.operationId);
+      this.patches.delete(revision);
+    }
+    if (this.patches.size && !this.syncTimer) this.syncTimer = window.setTimeout(() => {
+      this.syncTimer = undefined;
+      if (this.patches.size && this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: 'sync' }));
+    }, 250);
+    if (!this.patches.size) { clearTimeout(this.syncTimer); this.syncTimer = undefined; }
+  }
+  private updated() {
+    const savedIds = new Set(this.remote?.document.elements.map(e => e.id));
+    for (const [id] of this.peers) if (savedIds.has(id)) this.peers.delete(id);
+    this.publish({ status: this.pending.length ? 'saving' : 'saved', previews: [...this.peers.values()].map(p => p.element) }, true);
+    this.draft(); this.pump();
+  }
   private publish(patch: Partial<typeof this.state> = {}, rebase = false) {
     this.state = { ...this.state, ...(rebase ? { board: this.project() } : {}), ...patch };
     for (const listener of this.listeners) listener();
@@ -55,14 +84,14 @@ export class Collaboration {
     this.open();
     this.expiry = window.setInterval(() => {
       if (this.socket && Date.now() - this.lastReceived > 45000) this.socket.close();
-      for (const [id, peer] of this.peers) if (Date.now() - peer.time > 3500) this.peers.delete(id);
+      for (const [id, peer] of this.peers) if (Date.now() - peer.time > (peer.finished ? 30000 : 10000)) this.peers.delete(id);
       this.publish({ previews: [...this.peers.values()].map(p => p.element) });
     }, 1500);
     window.addEventListener('online', this.reconnect);
     window.addEventListener('offline', this.disconnect);
     window.addEventListener('beforeunload', this.unload);
     return () => {
-      this.stopped = true; clearTimeout(this.retry); clearInterval(this.expiry);
+      this.stopped = true; clearTimeout(this.retry); clearInterval(this.expiry); clearTimeout(this.syncTimer); this.syncTimer = undefined;
       this.socket?.close(); this.socket = undefined;
       window.removeEventListener('online', this.reconnect);
       window.removeEventListener('offline', this.disconnect);
@@ -81,7 +110,7 @@ export class Collaboration {
     const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/api/collaboration/socket`);
     this.socket = socket;
     this.lastReceived = Date.now();
-    socket.onopen = () => { if (this.socket === socket) socket.send(JSON.stringify({ type: 'join', ...(this.token ? { token: this.token } : { boardId: this.remote!.id }) })); };
+    socket.onopen = () => { if (this.socket === socket) socket.send(JSON.stringify({ type: 'join', protocol: 2, ...(this.token ? { token: this.token } : { boardId: this.remote!.id }) })); };
     socket.onmessage = event => {
       if (this.stopped || this.socket !== socket) return;
       this.lastReceived = Date.now();
@@ -91,14 +120,23 @@ export class Collaboration {
       if (message.type === 'ready') { this.sent = null; this.failures = 0; this.publish({ connected: true, error: '' }); }
       if (message.board) {
         if (!this.remote || message.board.revision >= this.remote.revision) this.remote = message.board;
-        if (message.operationId) {
-          this.pending = this.pending.filter(p => p.id !== message.operationId);
-          if (this.sent === message.operationId) this.sent = null;
-        }
-        this.publish({ status: this.pending.length ? 'saving' : 'saved' }, true); this.draft(); this.pump();
+        if (message.operationId) this.acknowledge(message.operationId);
+        if (message.type === 'snapshot') this.sent = null;
+        this.drainPatches(); this.updated();
+      }
+      if (message.operation && message.boardId === this.remote?.id) {
+        this.patches.set(message.revision, message);
+        this.drainPatches(); this.updated();
       }
       if (message.type === 'preview') {
-        if (message.element) this.peers.set(message.peerId, { element: message.element, time: Date.now() }); else this.peers.delete(message.peerId);
+        for (const [id, peer] of this.peers) if (peer.peerId === message.peerId && (message.disconnected || !peer.finished && id !== message.element?.id)) this.peers.delete(id);
+        if (message.element && !this.remote?.document.elements.some(e => e.id === message.element.id)) {
+          const previous = this.peers.get(message.element.id);
+          this.peers.set(message.element.id, { peerId: message.peerId, element: message.element, time: Date.now(), finished: message.finished === true || previous?.finished === true });
+          const own = [...this.peers].filter(([, peer]) => peer.peerId === message.peerId);
+          while (own.length > 32) this.peers.delete(own.shift()![0]);
+          while (this.peers.size > 128) this.peers.delete(this.peers.keys().next().value!);
+        }
         this.publish({ previews: [...this.peers.values()].map(p => p.element) });
       }
     };
@@ -124,11 +162,11 @@ export class Collaboration {
     this.pending.push({ id: crypto.randomUUID(), operation });
     this.publish({ status: this.state.connected ? 'saving' : 'local' }, true); this.draft(); this.pump();
   };
-  preview = (element: DrawnElement | null) => {
+  preview = (element: DrawnElement | null, finished = false) => {
     if (!this.state.connected || this.socket?.readyState !== WebSocket.OPEN || this.socket.bufferedAmount > 1_000_000) return;
-    if (element && performance.now() - this.previewAt < 80) return;
+    if (element && !finished && performance.now() - this.previewAt < 80) return;
     this.previewAt = performance.now();
-    this.socket.send(JSON.stringify({ type: 'preview', element }));
+    this.socket.send(JSON.stringify({ type: 'preview', element, finished }));
   };
   flush = async () => {
     if (!this.pending.length) return;

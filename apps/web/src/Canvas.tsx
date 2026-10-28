@@ -17,7 +17,7 @@ interface Props {
   canvasRef?: React.RefObject<CanvasHandle | null>;
   elements: DrawingElement[];
   remotePreviews?: DrawnElement[];
-  onPreview?: (element: DrawnElement | null) => void;
+  onPreview?: (element: DrawnElement | null, finished?: boolean) => void;
   background: BoardBackground;
   tool: Tool;
   figure?: FigureKind;
@@ -167,8 +167,12 @@ export function Canvas({ elements, remotePreviews = [], onPreview, background, t
     if (!active) return;
     if (draftFrame.current !== null) { cancelAnimationFrame(draftFrame.current); draftFrame.current = null; }
     gesture.current = null;
-    onPreview?.(null);
-    if (!cancelled && active.element) onChange([...elementsRef.current, active.figure ? figureElement(active.element, active.figure, active.snap) : active.snap ? improveShape(active.element) : active.element]);
+    if (!cancelled && active.element) {
+      const element = active.figure ? figureElement(active.element, active.figure, active.snap) : active.snap ? improveShape(active.element) : active.element;
+      // Keep a completed remote preview until its committed object arrives.
+      onPreview?.(element, true);
+      onChange([...elementsRef.current, element]);
+    } else onPreview?.(null);
     if (!cancelled && active.erasing && (active.erasing.length !== active.baseIds.size || active.erasing.some((element, i) => element !== elementsRef.current[i]))) {
       onChange([...active.erasing, ...elementsRef.current.filter((element) => !active.baseIds.has(element.id))]);
     }

@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import type { Request } from 'express';
 import type { PoolClient } from 'pg';
 import type { Board, BoardOperation, SharingState } from '@whiteboard/shared';
-import { applyOperation } from '@whiteboard/shared/board-operations';
+import { applyOperation, difference } from '@whiteboard/shared/board-operations';
 import { DatabaseService } from './database.service';
 import { BoardsService } from './boards.service';
 import { AuthService } from './auth/auth.service';
@@ -14,23 +14,25 @@ const columns = `b.id, b.title, b.document, b.revision, b.collaborative, b.creat
 const activeOwner = `JOIN workspace_owners w ON w.id=b.owner_id LEFT JOIN users u ON u.id=w.user_id`;
 const active = `w.merged_into_id IS NULL AND w.blocked_at IS NULL AND u.blocked_at IS NULL`;
 export interface BoardAccess { request: Request; boardId: string; token?: string }
+export interface CommittedChange { baseRevision: number; operation: BoardOperation }
 
 @Injectable()
 export class CollaborationService {
   private readonly validation = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true });
   constructor(private readonly db: DatabaseService, private readonly boards: BoardsService, private readonly auth: AuthService) {}
 
-  async authorize(access: BoardAccess, client?: PoolClient, lock = false) {
+  async authorize(access: BoardAccess, client?: PoolClient, lock = false, includeDocument = true) {
     if (!uuid.test(access.boardId)) throw new NotFoundException('Доска больше недоступна');
     const owner = access.token ? null : await this.auth.resolve(access.request, client);
     const result = await (client ?? this.db.pool).query(
-      `SELECT ${columns} FROM boards b ${activeOwner} WHERE b.id=$1 AND ${active} ${lock ? 'FOR UPDATE OF b' : ''}`, [access.boardId]);
+      `SELECT ${includeDocument ? columns : 'b.id, b.owner_id, b.share_token'} FROM boards b ${activeOwner} WHERE b.id=$1 AND ${active} ${lock ? 'FOR UPDATE OF b' : ''}`, [access.boardId]);
     const row = result.rows[0];
     if (!row || (access.token ? !/^[\w-]{43}$/.test(access.token) || row.share_token !== access.token : !owner || row.owner_id !== owner.workspaceId)) {
       throw new NotFoundException('Доска больше недоступна');
     }
     return row;
   }
+  checkAccess(access: BoardAccess) { return this.authorize(access, undefined, false, false); }
   publicBoard(row: Awaited<ReturnType<CollaborationService['authorize']>>): Board {
     const { owner_id, share_token, ...board } = row;
     return board;
@@ -72,7 +74,9 @@ export class CollaborationService {
     for (const change of operation.elements) {
       if (!change || !uuid.test(change.id) || Object.keys(change).some(k => !['id', 'before', 'after'].includes(k)) ||
         change.before === undefined || change.after === undefined || (change.before && change.before.id !== change.id) || (change.after && change.after.id !== change.id)) throw new BadRequestException('Неверный объект');
+      for (const side of ['before', 'after'] as const) if (change[side] !== null && (typeof change[side] !== 'object' || Array.isArray(change[side]))) throw new BadRequestException('Неверный объект');
     }
+    if (operation.title && (typeof operation.title.before !== 'string' || typeof operation.title.after !== 'string')) throw new BadRequestException('Неверное название');
     for (const key of ['title', 'background'] as const) {
       const value = operation[key];
       if (value && (typeof value !== 'object' || Object.keys(value).some(k => !['before', 'after'].includes(k)) || value.before === undefined || value.after === undefined)) throw new BadRequestException('Неверное изменение');
@@ -84,9 +88,11 @@ export class CollaborationService {
       const row = await this.authorize(access, client, true);
       if (!row.collaborative) throw new BadRequestException('Совместная работа не включена');
       const duplicate = await client.query('SELECT 1 FROM board_operations WHERE board_id=$1 AND operation_id=$2', [access.boardId, operationId]);
-      if (duplicate.rowCount) return this.publicBoard(row);
+      if (duplicate.rowCount) return { board: this.publicBoard(row), change: undefined as CommittedChange | undefined };
       const board = applyOperation(this.publicBoard(row), operation);
-      await this.validateBoard(board);
+      // Both sides of every changed object were validated above. Revalidating
+      // thousands of unchanged DTOs on every pen-up blocks all socket previews.
+      if (board.document.elements.length > 10000 || JSON.stringify(board.document).length > 9_000_000) throw new BadRequestException('Слишком большая доска');
       const assets = [...new Set(board.document.elements.flatMap(e => e.kind === 'image' ? [e.assetId] : []))];
       if (assets.length) {
         const found = await client.query(`SELECT id FROM image_assets WHERE id=ANY($1::uuid[]) AND owner_id=$2 AND purpose='board'
@@ -95,16 +101,15 @@ export class CollaborationService {
         if (found.rowCount !== assets.length) throw new BadRequestException('Изображение недоступно на этой доске');
         await client.query('INSERT INTO board_assets(board_id,asset_id) SELECT $1,unnest($2::uuid[]) ON CONFLICT DO NOTHING', [board.id, assets]);
       }
-      await client.query(`UPDATE boards SET title=$2, document=$3::jsonb, revision=revision+1, updated_at=now() WHERE id=$1`, [board.id, board.title, JSON.stringify(board.document)]);
+      const updated = await client.query(`UPDATE boards SET title=$2, document=$3::jsonb, revision=revision+1, updated_at=now() WHERE id=$1 RETURNING revision, updated_at AS "updatedAt"`, [board.id, board.title, JSON.stringify(board.document)]);
       await client.query('INSERT INTO board_operations(board_id,operation_id) VALUES($1,$2)', [board.id, operationId]);
-      const updated = await client.query(`SELECT ${columns} FROM boards b WHERE b.id=$1`, [board.id]);
-      return this.publicBoard(updated.rows[0]);
+      return { board: { ...board, ...updated.rows[0] } as Board, change: { baseRevision: row.revision, operation: difference(this.publicBoard(row), board) } as CommittedChange };
     });
-    this.boards.events.emit('board', saved, operationId);
+    if (saved.change) this.boards.events.emit('board', saved.board, operationId, saved.change);
     return saved;
   }
   async preview(access: BoardAccess, element: unknown) {
-    await this.authorize(access);
+    await this.checkAccess(access);
     if (element !== null) await this.validateBoard({ title: 'Доска', revision: 0, document: { version: 1, elements: [element] } } as Board);
     // Images are never relayed as previews (avoid bypassing asset authorization).
     if (element && (element as { kind: string }).kind === 'image') throw new BadRequestException('Неверное превью');

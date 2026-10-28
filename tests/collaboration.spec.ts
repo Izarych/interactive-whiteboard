@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import type { Page, BrowserContext } from '@playwright/test';
+import type { Page, BrowserContext, WebSocketRoute } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import WebSocket from 'ws';
@@ -147,6 +147,9 @@ test('socket rejects foreign origins, deduplicates retries and refuses mutations
     const board = await (await context.request.get(`/api/boards/${id}`)).json(); expect(board.revision).toBe(1); expect(board.document.elements).toHaveLength(1);
     socket.send(JSON.stringify({ type: 'operation', operationId: randomUUID(), operation: { elements: [{ id: element.id, before: element, after: { ...element, src: 'https://foreign.example/pixel' } }] } }));
     await expect.poll(() => messages.some(m => m.type === 'error')).toBe(true);
+    const errorsBefore = messages.filter(m => m.type === 'error').length;
+    socket.send(JSON.stringify({ type: 'operation', operationId: randomUUID(), operation: { elements: [], title: { before: board.title, after: null } } }));
+    await expect.poll(() => messages.filter(m => m.type === 'error').length).toBe(errorsBefore + 1);
     await context.request.put(`/api/collaboration/${id}/sharing`, { data: { enabled: false } });
     await expect.poll(() => messages.some(m => m.type === 'unavailable')).toBe(true);
     expect((await (await context.request.get(`/api/boards/${id}`)).json()).revision).toBe(1);
@@ -192,4 +195,59 @@ test('shared storage failures remain visible instead of claiming an offline draw
     await expect(page.getByText('1 объектов', { exact: true })).toBeVisible();
     await expect(pupil.getByText('Сохранено', { exact: true })).toBeVisible();
   } finally { await student.close(); await cleanupWorkspaces(owners, process.env.BB_E2E_IMAGE_DIRECTORY); }
+});
+
+test('finished strokes never blink during delayed confirmations and a populated board sends patches instead of snapshots', async ({ page, context, browser }) => {
+  test.setTimeout(90000);
+  const owners: string[] = [], student = await browser.newContext(), pupil = await student.newPage();
+  let release!: () => void;
+  try {
+    const id = await setup(page, context, owners);
+    const elements = Array.from({ length: 3000 }, () => ({ id: randomUUID(), kind: 'stroke', color: '#355dff', width: 4, points: [-1000, -1000, -900, -900] }));
+    const response = await context.request.put(`/api/boards/${id}`, { data: { title: 'Большой урок', revision: 0, document: { version: 1, elements } } });
+    expect(response.ok()).toBeTruthy(); await page.reload();
+    const link = await enable(page);
+    const account = await (await student.request.post('http://localhost:5174/api/auth/guest')).json(); owners.push(account.workspaceId);
+    let route: WebSocketRoute, hold = true, confirmedBytes = 0;
+    const queued: (string | Buffer)[] = [];
+    await pupil.routeWebSocket('**/api/collaboration/socket', ws => {
+      route = ws;
+      ws.connectToServer().onMessage(message => {
+        const parsed = JSON.parse(message.toString());
+        if (['patch', 'ack', 'board', 'snapshot'].includes(parsed.type)) {
+          confirmedBytes += Buffer.byteLength(message);
+          if (hold) { queued.push(message); return; }
+        }
+        ws.send(message);
+      });
+    });
+    release = () => { hold = false; for (const message of queued.splice(0).reverse()) route.send(message); };
+    await connect(pupil, link);
+    await draw(page);
+    await expect(page.getByText('Сохранено', { exact: true })).toBeVisible();
+    await expect(pupil.getByTestId('canvas')).toHaveAttribute('data-remote-previews', '1');
+    await draw(page, 500);
+    await expect(page.getByText('Сохранено', { exact: true })).toBeVisible();
+    await expect(pupil.getByTestId('canvas')).toHaveAttribute('data-remote-previews', '2');
+    expect(queued.length).toBeGreaterThanOrEqual(2);
+    expect(confirmedBytes).toBeLessThan(50000);
+    await pupil.evaluate(() => {
+      const state = { misses: 0, frames: 0 };
+      (window as any).__strokeVisibility = state;
+      const sample = () => {
+        const visible = [...document.querySelectorAll<HTMLCanvasElement>('[data-testid="canvas"] canvas')].some(canvas => {
+          const ratio = canvas.width / parseFloat(canvas.style.width);
+          return canvas.getContext('2d')!.getImageData(Math.round(190 * ratio), Math.round(357 * ratio), 1, 1).data[3] > 0;
+        });
+        if (!visible) state.misses++;
+        if (++state.frames < 30) requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+    release();
+    await expect(pupil.getByText('3002 объектов', { exact: true })).toBeVisible();
+    await expect.poll(() => pupil.evaluate(() => (window as any).__strokeVisibility.frames)).toBe(30);
+    expect(await pupil.evaluate(() => (window as any).__strokeVisibility.misses)).toBe(0);
+    await expect(pupil.getByTestId('canvas')).toHaveAttribute('data-remote-previews', '0');
+  } finally { release?.(); await student.close(); await cleanupWorkspaces(owners, process.env.BB_E2E_IMAGE_DIRECTORY); }
 });
