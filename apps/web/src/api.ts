@@ -4,6 +4,10 @@ export class ApiError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 
+export function temporaryConnectionError(reason: unknown) {
+  return reason instanceof ApiError && (reason.status === 0 || reason.status === 408 || reason.status === 429 || reason.status >= 500);
+}
+
 export async function request<T>(path: string, options?: RequestInit): Promise<T> {
   let response: Response;
   try {

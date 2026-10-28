@@ -9,7 +9,7 @@ test.afterEach(cleanupWorkerFixtures);
 const webKey = 'bluviboard:release-seen';
 const nativeKey = 'bluviboard:desktop-release-seen';
 const pendingKey = 'bluviboard:release-after-update';
-const historyTitles = [`BluviBoard ${appVersion}`, 'BluviBoard 1.3.3', 'BluviBoard 1.3.2'];
+const historyTitles = [`BluviBoard ${appVersion}`, 'BluviBoard 1.4.0', 'BluviBoard 1.3.3'];
 
 test('a newer browser version shows bundled notes, remembers dismissal, and allows reopening on mobile', async ({ page }) => {
   await page.goto('/');
@@ -47,7 +47,7 @@ test('a newer browser version shows bundled notes, remembers dismissal, and allo
   await history.focus();
   await page.keyboard.press('Control+End');
   await expect.poll(() => history.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
-  await expect(dialog).toContainText('Настройки инструментов');
+  await expect(dialog).toContainText('Работа при сбоях связи');
   await page.screenshot({ path: 'test-results/release-notes-mobile.png', fullPage: true });
   await dialog.getByRole('button', { name: 'Понятно', exact: true }).click();
   await expect(dialog).toHaveCount(0);

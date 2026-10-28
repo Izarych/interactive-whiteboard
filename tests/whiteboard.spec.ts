@@ -584,7 +584,7 @@ test('stale writes show a conflict and the local drawing can be saved as a separ
   }
 });
 
-test('failed autosave preserves a local draft across reload and can be retried', async ({ page, request }) => {
+test('failed autosave quietly preserves a local draft across reload and retries automatically', async ({ page, request }) => {
   const ids: string[] = [];
   page.on('dialog', (dialog) => dialog.accept());
   try {
@@ -595,14 +595,14 @@ test('failed autosave preserves a local draft across reload and can be retried',
       ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'Temporary offline test' }) })
       : route.continue());
     await draw(page, [140, 200], [300, 280]);
-    await expect(page.getByText('Не сохранено', { exact: true })).toBeVisible();
+    await expect(page.getByText('Сохранено на устройстве', { exact: true })).toBeVisible();
+    await expect(page.getByRole('alert')).toHaveCount(0);
     expect((await read(request, id)).document.elements).toHaveLength(0);
     await page.reload();
     await expect(page.getByText('1 объектов', { exact: true })).toBeVisible();
-    await expect(page.getByText('Не сохранено', { exact: true })).toBeVisible();
+    await expect(page.getByText('Сохранено на устройстве', { exact: true })).toBeVisible();
     await page.unroute(`**/api/boards/${id}`);
-    await page.getByRole('button', { name: 'Повторить сохранение', exact: true }).click();
-    await expect(page.getByText('Сохранено', { exact: true })).toBeVisible();
+    await expect(page.getByText('Сохранено', { exact: true })).toBeVisible({ timeout: 10000 });
     expect((await read(request, id)).document.elements).toHaveLength(1);
     await page.reload();
     await expect(page.getByText('1 объектов', { exact: true })).toBeVisible();

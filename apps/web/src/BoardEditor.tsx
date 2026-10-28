@@ -84,7 +84,7 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
   const setModifier = (value: ShapeModifier) => { setShapeModifier(value); saveShapeModifier(value); };
   const chooseFigure = (value: FigureKind) => { canvasRef.current?.finish(); setFigure(value); };
   const background = board.document.background ?? DEFAULT_BACKGROUND;
-  const saveText = uploading ? 'Загрузка изображения…' : status === 'saved' ? 'Сохранено' : status === 'saving' ? 'Сохранение…' : status === 'pending' ? 'Есть изменения' : 'Не сохранено';
+  const saveText = uploading ? 'Загрузка изображения…' : status === 'saved' ? 'Сохранено' : status === 'local' ? 'Сохранено на устройстве' : status === 'saving' ? 'Сохранение…' : status === 'pending' ? 'Есть изменения' : 'Не сохранено';
   const togglePanel = (next: NonNullable<typeof panel>) => setPanel((previous) => previous === next ? null : next);
   useEffect(() => {
     if (!activePanel) return;
@@ -270,7 +270,7 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
         <header className="board-info-panel">
           <button className="editor-icon-button" aria-label={sidebarCollapsed ? 'Показать боковую панель' : 'Свернуть боковую панель'} aria-expanded={!sidebarCollapsed} aria-controls="boards-sidebar" title="Список досок" onClick={onToggleSidebar}>{sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}</button>
           <div className="board-name-block"><input className="board-title" aria-label="Название доски" maxLength={120} value={board.title} onChange={(event) => edit({ title: event.target.value })} />
-            <span className={`save-status save-status--${status}`} role="status"><span className="status-dot" />{saveText}</span></div>
+            <span className={`save-status save-status--${status}`} role="status" title={status === 'local' ? 'Сервер временно недоступен. Можно продолжать рисовать: изменения сохраняются на устройстве и отправятся автоматически после восстановления связи. Не очищайте данные приложения.' : undefined}><span className="status-dot" />{saveText}</span></div>
           <span className="editor-divider" />
           <button className="editor-icon-button" aria-label="Отменить" title="Отменить (Ctrl+Z)" disabled={!history.undo.length} onClick={undo}><Undo2 size={18} /></button>
           <button className="editor-icon-button" aria-label="Повторить" title="Повторить (Ctrl+Shift+Z)" disabled={!history.redo.length} onClick={redo}><Redo2 size={18} /></button>
@@ -327,7 +327,7 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
       <div className="editor-alerts">
         {panelPin.error && <div className="error-banner" role="alert"><span>{panelPin.error}</span><button disabled={panelPin.saving} onClick={panelPin.reload}>Повторить загрузку настройки</button></div>}
         {(error || draftWarning) && <div className="error-banner" role="alert">
-          <span>{error || draftWarning} Рисунок остаётся в этой вкладке{draftWarning ? '.' : ' и в локальной резервной копии.'}</span>
+          <span>{draftWarning || error} Рисунок остаётся в этой вкладке{draftWarning ? '.' : ' и в локальной резервной копии.'}</span>
           {error && <><button onClick={() => { void flush().catch(() => {}); }}>Повторить сохранение</button>
             <button onClick={onCopy}>Сохранить как новую доску</button></>}
         </div>}
