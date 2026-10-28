@@ -66,16 +66,18 @@ function pwaWorker(): Plugin {
 }
 
 export default defineConfig({
+  optimizeDeps: { include: ['@whiteboard/shared/board-operations'] },
   plugins: [react(), pwaWorker()],
   define: { __BLUVIBOARD_RELEASES__: JSON.stringify({ web: releaseNotes(webVersion), webHistory, desktop: desktopReleases }), __BLUVIBOARD_BUILD_ID__: JSON.stringify(buildId) },
   build: {
+    commonjsOptions: { include: [/node_modules/, /packages[\\/]shared/] },
     rollupOptions: {
       input: Object.fromEntries(['index', ...guidePages].map((name) => [name, fileURLToPath(new URL(name === 'index' ? './index.html' : `./${name}/index.html`, import.meta.url))])),
     },
   },
   server: {
     proxy: {
-      '/api': process.env.API_PROXY_TARGET ?? 'http://localhost:3000',
+      '/api': { target: process.env.API_PROXY_TARGET ?? 'http://localhost:3000', ws: true },
       '/robots.txt': process.env.API_PROXY_TARGET ?? 'http://localhost:3000',
       '/sitemap.xml': process.env.API_PROXY_TARGET ?? 'http://localhost:3000',
     },

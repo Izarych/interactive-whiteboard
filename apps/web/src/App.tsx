@@ -4,7 +4,7 @@ import { api, errorMessage } from './api';
 import { AuthPanel, pendingRegistration } from './AuthPanel';
 import type { AuthMode } from './AuthPanel';
 import { ProfilePanel } from './ProfilePanel';
-import { PublicIntro } from './PublicIntro';
+import { PublicPage } from './PublicPage';
 import { clearImageCache } from './images';
 import Workspace from './Workspace';
 import { usePageMetadata } from './seo';
@@ -24,6 +24,9 @@ function App({ releaseNotesOpen = false }: { releaseNotesOpen?: boolean }) {
   const [auth, setAuth] = useState<{ mode: AuthMode; email?: string } | null>(null);
   const [profile, setProfile] = useState(false);
   const [admin, setAdmin] = useState(window.location.pathname.startsWith('/admin'));
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState('');
+  const [resetNotice, setResetNotice] = useState<{ email: string; sequence: number } | null>(null);
   const channel = useRef<BroadcastChannel | null>(null);
   const bootRequest = useRef(0);
   usePageMetadata(admin || (!!session && session.kind !== 'anonymous'), admin);
@@ -62,21 +65,43 @@ function App({ releaseNotesOpen = false }: { releaseNotesOpen?: boolean }) {
 
   const changeSession = (next: SessionInfo) => {
     bootRequest.current += 1;
-    clearImageCache(); setSession(next); setAuth(null); setProfile(false);
+    clearImageCache(); setSession(next); setAuth(null); setProfile(false); setResetNotice(null);
     channel.current?.postMessage('changed');
   };
   const saveProfile = (user: UserProfile) => {
     if (session?.kind === 'user') changeSession({ ...session, user });
   };
 
-  if (!session) return <main className={`auth-shell ${admin ? '' : 'auth-shell--public'}`} inert={releaseNotesOpen}>
-    {!admin && <PublicIntro />}
-    <section id="start" className="auth-card auth-loading">
+  const loading = <section id="start" className="auth-card auth-loading">
       <img src="/favicon.svg" width="64" height="64" alt="BluviBoard" />
       <p>{bootError || 'Открываем ваше пространство…'}</p>
       {bootError && <button className="primary-button" onClick={() => { void load(); }}>Попробовать снова</button>}
-    </section>
-  </main>;
+    </section>;
+  const resetSession = (email?: string) => {
+    if (email) setResetNotice((previous) => ({ email, sequence: (previous?.sequence ?? 0) + 1 }));
+    void api.session().then((next) => {
+      clearImageCache(); setSession(next); setAuth(null); setProfile(false); channel.current?.postMessage('changed');
+    }).catch((reason) => setBootError(errorMessage(reason)));
+  };
+  if (!admin && (!session || session.kind === 'anonymous')) {
+    const publicSession: SessionInfo = session ?? { kind: 'anonymous', workspaceId: null, user: null };
+    const start = async () => {
+      if (starting) return;
+      setStarting(true); setStartError('');
+      try { changeSession(await api.guest()); }
+      catch (reason) { setStartError(errorMessage(reason)); }
+      finally { setStarting(false); }
+    };
+    // Keep the public shell mounted while the session loads. Otherwise a quick
+    // sketch in the demo disappears when the login form replaces its loader.
+    return <><div className="pwa-app" inert={leaving || releaseNotesOpen || !!auth}>
+      <PublicPage starting={starting} startError={startError} onStart={() => { void start(); }} onLogin={() => setAuth({ mode: 'login' })}>
+        {session ? <AuthPanel embedded session={session} resetNotice={resetNotice} onDone={changeSession} onResetSession={resetSession} /> : loading}
+      </PublicPage>
+    </div>{auth && <AuthPanel session={publicSession} initialMode={auth.mode} onDone={changeSession} onResetSession={resetSession} onClose={() => setAuth(null)} />}
+      <div className="application-notices">{!closing && !preparingUpdate && <PwaUpdateNotice />}{!closing && <DesktopUpdateNotice />}<DesktopCloseNotice /></div></>;
+  }
+  if (!session) return <main className="auth-shell" inert={releaseNotesOpen}>{loading}</main>;
 
   const active = session.kind !== 'anonymous';
   const needsAdminLogin = admin && (session.kind !== 'user' || session.user.role !== 'admin');
@@ -89,11 +114,7 @@ function App({ releaseNotesOpen = false }: { releaseNotesOpen?: boolean }) {
         onAuth={(mode) => setAuth({ mode })} onProfile={() => setProfile(true)} onSession={changeSession} onAdmin={() => navigate(true)} />)}
     {(!active || auth || needsAdminLogin) && <AuthPanel key={admin ? 'admin-auth' : 'public-auth'} adminOnly={admin} session={session} initialMode={auth?.mode ?? 'login'} initialEmail={auth?.email}
       onDone={changeSession} onClose={active && !needsAdminLogin ? () => setAuth(null) : undefined}
-      onResetSession={() => {
-        void api.session().then((next) => {
-          clearImageCache(); setSession(next); channel.current?.postMessage('changed');
-        }).catch((reason) => setBootError(errorMessage(reason)));
-      }} />}
+      onResetSession={resetSession} />}
     {profile && session.kind === 'user' && <ProfilePanel user={session.user} onSaved={saveProfile} onClose={() => setProfile(false)}
       onResetPassword={() => { setProfile(false); setAuth({ mode: 'forgot', email: session.user.email }); }}
       onLogout={async () => { await api.logout(); changeSession(await api.session()); }} />}

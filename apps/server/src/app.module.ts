@@ -19,10 +19,13 @@ import { DesktopReleaseService } from './desktop-release.service';
 import { ToolShortcutsController } from './tool-shortcuts.controller';
 import { SiteFilesController } from './site-files.controller';
 import { SiteFilesService } from './site-files.service';
+import { CollaborationService } from './collaboration.service';
+import { CollaborationController } from './collaboration.controller';
+import { CollaborationSocket } from './collaboration.socket';
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true })],
-  controllers: [AppController, BoardsController, AssetsController, AuthController, AdminController, DesktopReleaseController, ToolShortcutsController, SiteFilesController],
-  providers: [DatabaseService, BoardsService, StorageService, AssetsService, AuthService, AuthGuard, MailService, AdminGuard, AdminService, DesktopReleaseService, SiteFilesService],
+  controllers: [AppController, BoardsController, AssetsController, AuthController, AdminController, DesktopReleaseController, ToolShortcutsController, SiteFilesController, CollaborationController],
+  providers: [DatabaseService, BoardsService, StorageService, AssetsService, AuthService, AuthGuard, MailService, AdminGuard, AdminService, DesktopReleaseService, SiteFilesService, CollaborationService, CollaborationSocket],
 })
 export class AppModule {}

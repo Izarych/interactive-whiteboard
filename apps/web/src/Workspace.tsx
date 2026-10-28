@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import type { ActiveSession, Board, BoardSummary, SessionInfo, ToolShortcuts } from '@whiteboard/shared';
 import { api, errorMessage } from './api';
 import type { EditorHandle } from './BoardEditor';
-import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { Check, FileText, ImagePlus, PanelLeftClose, PanelLeftOpen, PencilLine, Plus, X } from 'lucide-react';
 import { InstallControls } from './InstallControls';
 import { registerUpdateGuard } from './pwa';
 
@@ -23,6 +23,7 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
 }) {
   const [boards, setBoards] = useState<BoardSummary[]>([]);
   const [active, setActive] = useState<Board | null>(null);
+  const [sharingBoard, setSharingBoard] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const editorRef = useRef<EditorHandle | null>(null);
@@ -201,18 +202,18 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
   });
 
   return (
-    <main className={`app-shell ${sidebarCollapsed ? 'app-shell--sidebar-collapsed' : ''}`} inert={blocked}>
+    <main className={`app-shell studio-workspace ${sidebarCollapsed ? 'app-shell--sidebar-collapsed' : ''}`} inert={blocked}>
       {!sidebarCollapsed && <button className="sidebar-backdrop" aria-label="Закрыть список досок" onClick={toggleSidebar} />}
       <aside id="boards-sidebar" className="sidebar" aria-label="Боковая панель" hidden={sidebarCollapsed}>
         <div className="brand"><img className="brand-icon" src="/favicon.svg" alt="" aria-hidden="true" />
-          <div><span className="brand-name">Bluvi<span>Board</span></span><small>Пространство для идей</small></div>
+          <div><span className="brand-name">Bluvi<span>Board</span></span><small>Моё пространство</small></div>
           <button className="sidebar-close" aria-label="Скрыть список досок" title="Скрыть список досок" onClick={toggleSidebar}><X size={17} /></button></div>
-        <button className="primary-button" disabled={busy} onClick={create}>+ Новая доска</button>
+        <button className="primary-button studio-create-button" aria-label="+ Новая доска" disabled={busy} onClick={create}><Plus size={17} />Новая доска</button>
         <div className="sidebar-heading">Мои доски <span>{boards.length}</span></div>
         <nav className="board-list" aria-label="Доски">
-          {boards.map((board) => <div className={`board-item ${active?.id === board.id ? 'active' : ''}`} key={board.id}>
+          {boards.map((board, index) => <div className={`board-item ${active?.id === board.id ? 'active' : ''}`} key={board.id}>
             <button className="board-open" disabled={busy} onClick={() => { void open(board.id); }} aria-current={active?.id === board.id ? 'page' : undefined}>
-              <span className="board-thumbnail">▤</span><span className="board-details"><strong>{board.title}</strong>
+              <span className={`board-thumbnail board-thumbnail--${index % 3}`}><FileText size={17} strokeWidth={1.5} /></span><span className="board-details"><strong>{board.title}</strong>
                 <small>{new Date(board.updatedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</small></span>
             </button>
             <button className="delete-button" disabled={busy} title="Удалить доску" aria-label={`Удалить доску ${board.title}`} onClick={() => { void remove(board); }}>×</button>
@@ -232,19 +233,23 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
           {session.user?.role === 'admin' && <button className="admin-entry-button" disabled={busy} onClick={() => { void run(async () => { await editorRef.current?.flush(); onAdmin(); }); }}>Админ-панель →</button>}
         </div>
         <InstallControls />
-        <div className="sidebar-footer">Всё сохраняется автоматически<br /><span>Ваши идеи остаются с вами</span></div>
+        <div className="sidebar-footer"><span className="studio-footer-dot" />Пространство для ваших идей<br /><span>В своём ритме. Без лишнего.</span></div>
       </aside>
       <div className={`workspace ${busy ? 'workspace--busy' : ''}`}>
         {error && <div className="error-banner" role="alert"><span>{error}</span><button disabled={busy} onClick={reloadList}>Обновить список</button></div>}
         {active ? <Suspense fallback={<div className="loading-overlay">Загрузка холста…</div>}>
-          <BoardEditor key={active.id} initial={active} onSaved={onSaved} onCopy={copy} editorRef={editorRef} disabled={busy || blocked}
+          <BoardEditor key={`${active.id}:${!!active.collaborative}`} initial={active} onSaved={onSaved} onCopy={copy} editorRef={editorRef} disabled={busy || blocked}
+            sharingInitiallyOpen={sharingBoard === active.id}
+            onCollaborative={() => { void run(async () => { setSharingBoard(active.id); setActive(await api.get(active.id)); }); }}
             panelPin={{ pinned: panelPinned, ready: panelReady, saving: panelSaving, error: panelError, setPinned: savePanel, reload: () => { void loadPanel(); } }}
             toolShortcuts={toolShortcuts} shortcutsReady={shortcutsReady} shortcutsError={shortcutsError} onReloadShortcuts={() => { void loadShortcuts(); }} onSaveShortcuts={saveShortcuts}
             sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} onNewBoard={create} /></Suspense> :
           <section className="empty-state"><button className="empty-sidebar-toggle editor-icon-button" aria-label={sidebarCollapsed ? 'Показать боковую панель' : 'Свернуть боковую панель'} aria-expanded={!sidebarCollapsed} aria-controls="boards-sidebar" onClick={toggleSidebar}>{sidebarCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}</button>
-            <img className="empty-icon" src="/favicon.svg" alt="" aria-hidden="true" /><h1>Место для вашей следующей идеи</h1>
-            <p>Рисуйте, пробуйте цвета и создавайте столько досок, сколько нужно.</p>
-            <button className="primary-button" disabled={busy} onClick={create}>Создать первую доску</button></section>}
+            <div className="studio-empty-art" aria-hidden="true"><i /><i /><div><svg viewBox="0 0 200 140"><path d="M24 94c24-70 53 37 83-20s48-29 64 8" fill="none" stroke="#6d82d6" strokeWidth="3" strokeLinecap="round" /><path d="m149 32 4 10 11 1-8 8 2 11-10-5-10 5 2-11-8-8 11-1Z" fill="#e1c15e" /></svg><span>а что, если…</span></div></div>
+            <span className="studio-empty-eyebrow">ВАШ ЧИСТЫЙ ЛИСТ</span><h1>Место для вашей<br /> следующей <em>идеи</em></h1>
+            <p>У каждой идеи есть первый штрих. Создайте доску — для новой темы, сложной задачи или просто вдохновения.</p>
+            <button className="primary-button" disabled={busy} onClick={create}><Plus size={17} />Создать первую доску</button>
+            <div className="studio-empty-features"><span><PencilLine size={13} />Рисуйте от руки</span><span><ImagePlus size={13} />Добавляйте скриншоты</span><span><Check size={13} />Возвращайтесь к идеям</span></div></section>}
         {busy && <div className="loading-overlay" role="status">Загрузка…</div>}
       </div>
     </main>

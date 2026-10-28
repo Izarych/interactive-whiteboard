@@ -1,6 +1,6 @@
 {
   "name": "@whiteboard/server",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "private": true,
   "scripts": {
     "build": "nest build",
@@ -30,6 +30,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "sharp": "^0.35.5",
+    "ws": "^8.22.0",
     "yjs": "^13.6.27"
   },
   "devDependencies": {
@@ -39,6 +40,7 @@
     "@types/node": "^24.5.2",
     "@types/nodemailer": "^7.0.5",
     "@types/pg": "^8.15.5",
+    "@types/ws": "^8.18.2",
     "typescript": "~5.9.2"
   }
 }

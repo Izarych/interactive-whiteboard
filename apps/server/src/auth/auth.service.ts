@@ -38,15 +38,16 @@ export class AuthService {
     response.cookie(COOKIE, token, { ...this.cookieOptions(), maxAge: (guest ? 180 : 30) * 86400000 });
   }
 
-  async resolve(request: Request): Promise<AuthContext | null> {
+  async resolve(request: Request, client?: PoolClient): Promise<AuthContext | null> {
     const token = this.token(request);
     if (!token) return null;
-    const result = await this.db.pool.query(
+    const executor = client ?? this.db.pool;
+    const result = await executor.query(
       `SELECT w.id AS "workspaceId", w.user_id AS "userId", u.role FROM sessions s JOIN workspace_owners w ON w.id = s.workspace_id
        LEFT JOIN users u ON u.id = w.user_id
        WHERE s.token_hash = $1 AND s.expires_at > now() AND w.merged_into_id IS NULL AND w.blocked_at IS NULL AND u.blocked_at IS NULL`, [digest(token)],
     );
-    if (result.rowCount) await this.db.pool.query(`WITH touched AS (
+    if (result.rowCount) await executor.query(`WITH touched AS (
       UPDATE sessions SET last_seen_at = now() WHERE token_hash = $1 AND last_seen_at < now() - interval '2 minutes' RETURNING workspace_id
     ) UPDATE workspace_owners w SET last_seen_at = now() FROM touched t WHERE w.id = t.workspace_id`, [digest(token)]);
     return result.rows[0] ?? null;

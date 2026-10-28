@@ -55,7 +55,21 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         created_at timestamptz NOT NULL DEFAULT now()
       );
       ALTER TABLE boards ADD COLUMN IF NOT EXISTS owner_id uuid REFERENCES workspace_owners(id) ON DELETE CASCADE;
+      ALTER TABLE boards ADD COLUMN IF NOT EXISTS collaborative boolean NOT NULL DEFAULT false;
+      ALTER TABLE boards ADD COLUMN IF NOT EXISTS share_token text;
+      CREATE UNIQUE INDEX IF NOT EXISTS boards_share_token_idx ON boards(share_token) WHERE share_token IS NOT NULL;
+      CREATE TABLE IF NOT EXISTS board_operations (
+        board_id uuid NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+        operation_id uuid NOT NULL,
+        PRIMARY KEY(board_id, operation_id)
+      );
       ALTER TABLE image_assets ADD COLUMN IF NOT EXISTS owner_id uuid REFERENCES workspace_owners(id) ON DELETE CASCADE;
+      ALTER TABLE image_assets ADD COLUMN IF NOT EXISTS shared_board_id uuid REFERENCES boards(id) ON DELETE SET NULL;
+      CREATE TABLE IF NOT EXISTS board_assets (
+        board_id uuid NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+        asset_id uuid NOT NULL REFERENCES image_assets(id) ON DELETE CASCADE,
+        PRIMARY KEY(board_id, asset_id)
+      );
       ALTER TABLE image_assets ADD COLUMN IF NOT EXISTS purpose varchar(16) NOT NULL DEFAULT 'board' CHECK (purpose IN ('board', 'avatar'));
       CREATE INDEX IF NOT EXISTS boards_owner_updated_idx ON boards (owner_id, updated_at DESC);
       CREATE INDEX IF NOT EXISTS image_assets_owner_idx ON image_assets (owner_id);

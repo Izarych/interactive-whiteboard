@@ -5,6 +5,12 @@ import { Canvas } from './Canvas';
 import type { Tool } from './Canvas';
 import type { CanvasHandle } from './Canvas';
 import { useBoard } from './useBoard';
+import { useCollaborativeBoard } from './useCollaborativeBoard';
+import type { Collaboration } from './collaboration';
+import { difference, applyOperation } from '@whiteboard/shared/board-operations';
+import { SharingControls } from './SharingControls';
+import { request } from './api';
+import type { DrawnElement, ImageAsset } from '@whiteboard/shared';
 import { api, errorMessage } from './api';
 import { loadImage } from './images';
 import { backgroundPatterns, DEFAULT_BACKGROUND } from './background';
@@ -36,7 +42,7 @@ const colors = drawingColors;
 // Existing user bindings for individual primitives remain editable and usable.
 const shortcutTools = [...tools, { id: 'rectangle' as const, label: 'Прямоугольник' }, { id: 'ellipse' as const, label: 'Овал' }];
 
-export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sidebarCollapsed, onToggleSidebar, onNewBoard, toolShortcuts, shortcutsReady, shortcutsError, onReloadShortcuts, onSaveShortcuts, panelPin }: {
+type EditorProps = {
   initial: Board; onSaved: (board: Board) => void; onCopy: () => void;
   editorRef: React.RefObject<EditorHandle | null>;
   disabled: boolean;
@@ -49,8 +55,31 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
   onReloadShortcuts: () => void;
   onSaveShortcuts: (shortcuts: ToolShortcuts) => Promise<void>;
   panelPin: ToolPanelPinState;
+  collaboration?: Collaboration;
+  participant?: boolean;
+  onCollaborative?: () => void;
+  sharingInitiallyOpen?: boolean;
+};
+export function BoardEditor(props: EditorProps) {
+  return props.initial.collaborative ? <CollaborativeEditor {...props} /> : <LocalEditor {...props} />;
+}
+function LocalEditor(props: EditorProps) { return <Editor {...props} sync={useBoard(props.initial, props.onSaved)} />; }
+function CollaborativeEditor(props: EditorProps) { return <Editor {...props} sync={useCollaborativeBoard(props.initial, props.onSaved, props.collaboration)} />; }
+function Editor({ initial, onCopy, editorRef, disabled, sidebarCollapsed, onToggleSidebar, onNewBoard, toolShortcuts, shortcutsReady, shortcutsError, onReloadShortcuts, onSaveShortcuts, panelPin, participant, collaboration, onCollaborative, sharingInitiallyOpen, sync }: EditorProps & {
+  sync: ReturnType<typeof useBoard> & { previews?: DrawnElement[]; preview?: (element: DrawnElement | null) => void; connected?: boolean; recoverySnapshot?: () => Board };
 }) {
-  const { board, edit, flush, status, error, draftWarning, snapshot } = useBoard(initial, onSaved);
+  const { board, edit, flush, status, error, draftWarning, snapshot } = sync;
+  const [titleInput, setTitleInput] = useState(board.title);
+  const titleFocused = useRef(false);
+  useEffect(() => { if (!titleFocused.current) setTitleInput(board.title); }, [board.title]);
+  const commitTitle = () => {
+    if (initial.collaborative && !participant && titleInput !== snapshot().title) edit({ title: titleInput.trim() || 'Без названия' });
+  };
+  useEffect(() => {
+    if (!initial.collaborative || participant || !titleFocused.current) return;
+    const timer = window.setTimeout(commitTitle, 600);
+    return () => window.clearTimeout(timer);
+  }, [titleInput]);
   const [tool, setTool] = useState<Tool>('pen');
   const [figure, setFigure] = useState<FigureKind>('rectangle');
   const [color, setColor] = useState(colors[0]);
@@ -60,7 +89,7 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
   const [highlighterWidth, setHighlighterWidth] = useState(24);
   const [highlighterOpacity, setHighlighterOpacity] = useState(.35);
   const [shapeModifier, setShapeModifier] = useState(storedShapeModifier);
-  const [history, setHistory] = useState<{ undo: DrawingElement[][]; redo: DrawingElement[][] }>({ undo: [], redo: [] });
+  const [history, setHistory] = useState<{ undo: { before: DrawingElement[]; after: DrawingElement[] }[]; redo: { before: DrawingElement[]; after: DrawingElement[] }[] }>({ undo: [], redo: [] });
   const stageRef = useRef<Konva.Stage | null>(null);
   const canvasRef = useRef<CanvasHandle | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -108,14 +137,15 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
   }, [activePanel, panelPin.pinned]);
   useImperativeHandle(editorRef, () => ({ flush: async (forUpdate) => {
     canvasRef.current?.finish();
+    commitTitle();
     while (pendingUploads.current) await uploads.current;
     if (forUpdate && failedUpload.current) throw new Error('Изображение не загрузилось. Повторите загрузку или закройте сообщение об ошибке.');
     await flush();
-  }, snapshot }));
+  }, snapshot: sync.recoverySnapshot ?? snapshot }));
 
   const changeElements = (elements: DrawingElement[]) => {
     const document = snapshot().document;
-    setHistory((previous) => ({ undo: [...previous.undo.slice(-49), document.elements], redo: [] }));
+    setHistory((previous) => ({ undo: [...previous.undo.slice(-49), { before: document.elements, after: elements }], redo: [] }));
     edit({ document: { ...document, elements } });
   };
 
@@ -143,7 +173,10 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
       setUploading(pendingUploads.current);
       uploads.current = uploads.current.then(async () => {
         try {
-          const asset = await api.uploadImage(file);
+          const asset = participant && collaboration?.token ? await (() => {
+            const form = new FormData(); form.append('file', file);
+            return request<ImageAsset>(`/collaboration/${board.id}/assets`, { method: 'POST', body: form, headers: { 'X-Board-Token': collaboration.token } });
+          })() : await api.uploadImage(file);
           const factor = Math.max(1 / Math.min(asset.width, asset.height), Math.min(10000 / Math.max(asset.width, asset.height),
             Math.min(1, viewport.width * 0.65 / asset.width, viewport.height * 0.65 / asset.height) / scale));
           const image: ImageElement = {
@@ -175,14 +208,18 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
   const undo = () => {
     const last = history.undo.at(-1);
     if (!last) return;
-    setHistory({ undo: history.undo.slice(0, -1), redo: [...history.redo, board.document.elements] });
-    edit({ document: { ...snapshot().document, elements: last } });
+    setHistory({ undo: history.undo.slice(0, -1), redo: [...history.redo, last] });
+    const current = snapshot();
+    const operation = difference({ ...current, document: { ...current.document, elements: last.after } }, { ...current, document: { ...current.document, elements: last.before } });
+    edit({ document: initial.collaborative ? applyOperation(current, operation).document : { ...current.document, elements: last.before } });
   };
   const redo = () => {
     const last = history.redo.at(-1);
     if (!last) return;
-    setHistory({ undo: [...history.undo, board.document.elements], redo: history.redo.slice(0, -1) });
-    edit({ document: { ...snapshot().document, elements: last } });
+    setHistory({ undo: [...history.undo, last], redo: history.redo.slice(0, -1) });
+    const current = snapshot();
+    const operation = difference({ ...current, document: { ...current.document, elements: last.before } }, { ...current, document: { ...current.document, elements: last.after } });
+    edit({ document: initial.collaborative ? applyOperation(current, operation).document : { ...current.document, elements: last.after } });
   };
 
   useEffect(() => {
@@ -265,19 +302,23 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
   return (
     <section ref={editorRoot} className="editor" inert={disabled}>
       <Canvas elements={board.document.elements} background={background} tool={tool} figure={figure} color={tool === 'highlighter' ? highlighterColor : color} width={tool === 'highlighter' ? highlighterWidth : width} opacity={tool === 'highlighter' ? highlighterOpacity : 1} eraserWidth={eraserWidth} shapeModifier={shapeModifier} stageRef={stageRef} canvasRef={canvasRef} onChange={changeElements}
+        remotePreviews={sync.previews} onPreview={sync.preview}
         selectedImageId={selectedImageId} onSelectImage={setSelectedImageId} onImageFiles={insertImages} />
       <div className="editor-chrome">
         <header className="board-info-panel">
-          <button className="editor-icon-button" aria-label={sidebarCollapsed ? 'Показать боковую панель' : 'Свернуть боковую панель'} aria-expanded={!sidebarCollapsed} aria-controls="boards-sidebar" title="Список досок" onClick={onToggleSidebar}>{sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}</button>
-          <div className="board-name-block"><input className="board-title" aria-label="Название доски" maxLength={120} value={board.title} onChange={(event) => edit({ title: event.target.value })} />
+          <button className="editor-icon-button" aria-label={participant ? 'На главную' : sidebarCollapsed ? 'Показать боковую панель' : 'Свернуть боковую панель'} aria-expanded={participant ? undefined : !sidebarCollapsed} aria-controls={participant ? undefined : 'boards-sidebar'} title={participant ? 'На главную' : 'Список досок'} onClick={onToggleSidebar}>{sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}</button>
+          <div className="board-name-block"><input className="board-title" aria-label="Название доски" readOnly={participant} maxLength={120} value={initial.collaborative ? titleInput : board.title}
+            onFocus={() => { titleFocused.current = true; }} onBlur={() => { titleFocused.current = false; commitTitle(); }}
+            onChange={(event) => { if (initial.collaborative) setTitleInput(event.target.value); else edit({ title: event.target.value }); }} />
             <span className={`save-status save-status--${status}`} role="status" title={status === 'local' ? 'Сервер временно недоступен. Можно продолжать рисовать: изменения сохраняются на устройстве и отправятся автоматически после восстановления связи. Не очищайте данные приложения.' : undefined}><span className="status-dot" />{saveText}</span></div>
+          {!participant && <SharingControls id={board.id} initiallyOpen={sharingInitiallyOpen} flush={async () => { canvasRef.current?.finish(); commitTitle(); while (pendingUploads.current) await uploads.current; await flush(); }} onEnabled={() => { if (!initial.collaborative) onCollaborative?.(); }} />}
           <span className="editor-divider" />
           <button className="editor-icon-button" aria-label="Отменить" title="Отменить (Ctrl+Z)" disabled={!history.undo.length} onClick={undo}><Undo2 size={18} /></button>
           <button className="editor-icon-button" aria-label="Повторить" title="Повторить (Ctrl+Shift+Z)" disabled={!history.redo.length} onClick={redo}><Redo2 size={18} /></button>
           <div className="editor-popover-anchor" data-editor-panel="board">
             <button className={`editor-icon-button ${panel === 'board' ? 'active' : ''}`} aria-label="Действия доски" aria-expanded={panel === 'board'} aria-controls="board-actions" title="Действия доски" onClick={() => togglePanel('board')}><MoreHorizontal size={19} /></button>
             {panel === 'board' && <section id="board-actions" className="editor-popover board-actions" role="dialog" aria-label="Действия доски">
-              <button onClick={() => { setPanel(null); onNewBoard(); }}><Plus size={17} />Новая доска</button>
+              {!participant && <button onClick={() => { setPanel(null); onNewBoard(); }}><Plus size={17} />Новая доска</button>}
               <button disabled={exporting || uploading > 0} onClick={() => { setPanel(null); void exportPng(); }}><Download size={17} />Скачать PNG</button>
               <button disabled={!board.document.elements.length} onClick={() => { if (window.confirm('Очистить холст? Это действие можно отменить.')) { changeElements([]); setPanel(null); } }}><Trash2 size={17} />Очистить</button>
               {tool === 'select' && board.document.elements.some((element) => element.id === selectedImageId && element.kind === 'image') && <button onClick={() => { deleteSelected(); setPanel(null); }}><Eraser size={17} />Удалить изображение</button>}
@@ -329,11 +370,12 @@ export function BoardEditor({ initial, onSaved, onCopy, editorRef, disabled, sid
         {(error || draftWarning) && <div className="error-banner" role="alert">
           <span>{draftWarning || error} Рисунок остаётся в этой вкладке{draftWarning ? '.' : ' и в локальной резервной копии.'}</span>
           {error && <><button onClick={() => { void flush().catch(() => {}); }}>Повторить сохранение</button>
-            <button onClick={onCopy}>Сохранить как новую доску</button></>}
+            {!participant && <button onClick={onCopy}>Сохранить как новую доску</button>}</>}
         </div>}
         {imageError && <div className="error-banner" role="alert"><span>{imageError}</span><button onClick={() => { failedUpload.current = false; setImageError(''); }}>Закрыть</button></div>}
       </div>
       <footer className="editor-footer"><span>{board.document.elements.length} объектов</span>
+        {initial.collaborative && <span data-testid="collaboration-status">{sync.connected ? 'Совместная работа · Подключено' : 'Совместная работа · Переподключение…'}</span>}
         <span>{tool === 'select' ? 'Перетаскивайте изображение · Уголки — размер · Delete — удалить' :
           tool === 'eraser' ? 'Ластик — точечно · Shift — весь объект' : tool === 'highlighter' ? 'Маркер — полупрозрачное выделение цветом' : `${shapeModifiers.find((item) => item.value === shapeModifier)!.label} — выровнять фигуру · Ctrl+V — скриншот`}</span></footer>
     </section>

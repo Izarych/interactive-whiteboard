@@ -1,3 +1,9 @@
+export interface BoardOperation {
+  elements: { id: string; before: DrawingElement | null; after: DrawingElement | null }[];
+  title?: { before: string; after: string };
+  background?: { before: BoardBackground | null; after: BoardBackground | null };
+}
+export interface SharingState { enabled: boolean; token: string | null }
 export interface DrawnElement {
   id: string;
   /** Fragments of an erased contour can still be deleted as one object. */
@@ -76,6 +82,7 @@ export interface BoardSummary {
 }
 
 export interface Board extends BoardSummary {
+  collaborative?: boolean;
   document: BoardDocument;
 }
 

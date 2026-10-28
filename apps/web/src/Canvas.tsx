@@ -16,6 +16,8 @@ export interface CanvasHandle { finish: () => void; zoomIn: () => void; zoomOut:
 interface Props {
   canvasRef?: React.RefObject<CanvasHandle | null>;
   elements: DrawingElement[];
+  remotePreviews?: DrawnElement[];
+  onPreview?: (element: DrawnElement | null) => void;
   background: BoardBackground;
   tool: Tool;
   figure?: FigureKind;
@@ -99,7 +101,7 @@ const Scene = memo(function Scene({ elements, selectable, onImageChange }: {
   </Layer>;
 });
 
-export function Canvas({ elements, background, tool, figure = 'rectangle', color, width, opacity = 1, eraserWidth = 24, shapeModifier = 'Shift', onChange, stageRef, selectedImageId, onSelectImage, onImageFiles, canvasRef }: Props) {
+export function Canvas({ elements, remotePreviews = [], onPreview, background, tool, figure = 'rectangle', color, width, opacity = 1, eraserWidth = 24, shapeModifier = 'Shift', onChange, stageRef, selectedImageId, onSelectImage, onImageFiles, canvasRef }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 1, height: 1 });
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
@@ -124,7 +126,8 @@ export function Canvas({ elements, background, tool, figure = 'rectangle', color
       const active = gesture.current;
       if (!active?.element) return;
       const snapshot = { ...active.element, points: [...active.element.points] };
-      setDraft(active.figure ? figureElement(snapshot, active.figure, active.snap) : active.snap ? improveShape(snapshot) : snapshot);
+      const next = active.figure ? figureElement(snapshot, active.figure, active.snap) : active.snap ? improveShape(snapshot) : snapshot;
+      setDraft(next); onPreview?.(next);
     });
   };
   useEffect(() => () => { if (draftFrame.current !== null) cancelAnimationFrame(draftFrame.current); }, []);
@@ -164,6 +167,7 @@ export function Canvas({ elements, background, tool, figure = 'rectangle', color
     if (!active) return;
     if (draftFrame.current !== null) { cancelAnimationFrame(draftFrame.current); draftFrame.current = null; }
     gesture.current = null;
+    onPreview?.(null);
     if (!cancelled && active.element) onChange([...elementsRef.current, active.figure ? figureElement(active.element, active.figure, active.snap) : active.snap ? improveShape(active.element) : active.element]);
     if (!cancelled && active.erasing && (active.erasing.length !== active.baseIds.size || active.erasing.some((element, i) => element !== elementsRef.current[i]))) {
       onChange([...active.erasing, ...elementsRef.current.filter((element) => !active.baseIds.has(element.id))]);
@@ -229,7 +233,7 @@ export function Canvas({ elements, background, tool, figure = 'rectangle', color
   };
 
   return (
-    <div className={`canvas canvas--${tool}`} ref={container} data-testid="canvas" data-background={background.pattern}
+    <div className={`canvas canvas--${tool}`} ref={container} data-testid="canvas" data-background={background.pattern} data-remote-previews={remotePreviews.length}
       onPointerLeave={() => { if (!gesture.current) setEraserPosition(null); }}
       onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }}
       onDrop={(event) => {
@@ -297,6 +301,7 @@ export function Canvas({ elements, background, tool, figure = 'rectangle', color
         }}>
         <Scene elements={erasedPreview ?? elements} selectable={tool === 'select'} onImageChange={onImageChange} />
         <Layer name="active-gesture">
+          {remotePreviews.map(element => <Element key={element.id} element={element} preview />)}
           {draft && <Element element={draft} preview />}
           {tool === 'eraser' && eraserPosition && <Circle name="editor-overlay" x={eraserPosition[0]} y={eraserPosition[1]} radius={eraserWidth / 2 / view.scale}
             stroke="#6366f1" strokeWidth={1 / view.scale} fill="#6366f110" listening={false} />}

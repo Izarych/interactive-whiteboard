@@ -99,9 +99,11 @@ test('the public home remains reachable on short desktop and mobile screens with
     // A login input must not autofocus-scroll the useful landing text away.
     await expect(intro).toBeInViewport();
     expect((await intro.boundingBox())!.y).toBeGreaterThanOrEqual(0);
-    await page.getByRole('link', { name: 'Открыть доску', exact: true }).click();
-    await page.getByRole('button', { name: 'Продолжить как гость', exact: true }).scrollIntoViewIfNeeded();
-    await expect(page.getByRole('button', { name: 'Продолжить как гость', exact: true })).toBeInViewport();
+    await page.getByRole('link', { name: 'Войти в аккаунт', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Вход и регистрация', exact: true });
+    await dialog.getByRole('button', { name: 'Продолжить как гость', exact: true }).scrollIntoViewIfNeeded();
+    await expect(dialog.getByRole('button', { name: 'Продолжить как гость', exact: true })).toBeInViewport();
+    await page.keyboard.press('Escape');
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(size.width);
   }
   await page.getByRole('heading', { level: 1 }).scrollIntoViewIfNeeded();

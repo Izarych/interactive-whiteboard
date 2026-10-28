@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ActiveSession, EmailChallenge, SessionInfo } from '@whiteboard/shared';
 import { api, errorMessage } from './api';
 import { AvatarPicker } from './AvatarPicker';
-import { PublicIntro } from './PublicIntro';
+import { PublicPage } from './PublicPage';
 
 export type AuthMode = 'login' | 'register' | 'verify' | 'forgot' | 'reset';
 interface PendingRegistration extends EmailChallenge { workspaceId: string; retryAt: number }
@@ -16,10 +16,12 @@ export function pendingRegistration(workspaceId: string | null): PendingRegistra
 }
 const clearPending = () => { try { localStorage.removeItem(pendingKey); } catch { /* Browser storage may be unavailable. */ } };
 
-export function AuthPanel({ session, initialMode = 'login', initialEmail = '', onDone, onResetSession, onClose, adminOnly = false }: {
+export function AuthPanel({ session, initialMode = 'login', initialEmail = '', onDone, onResetSession, onClose, adminOnly = false, embedded = false, resetNotice }: {
   session: SessionInfo; initialMode?: AuthMode; initialEmail?: string;
-  onDone: (session: ActiveSession) => void; onResetSession: () => void; onClose?: () => void;
+  onDone: (session: ActiveSession) => void; onResetSession: (email?: string) => void; onClose?: () => void;
   adminOnly?: boolean;
+  embedded?: boolean;
+  resetNotice?: { email: string; sequence: number } | null;
 }) {
   const [pending] = useState(() => adminOnly ? null : pendingRegistration(session.workspaceId));
   const [mode, setMode] = useState<AuthMode>(adminOnly && ['register', 'verify'].includes(initialMode) ? 'login' : pending && ['register', 'verify'].includes(initialMode) ? 'verify' : initialMode);
@@ -35,7 +37,15 @@ export function AuthPanel({ session, initialMode = 'login', initialEmail = '', o
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const cardRef = useRef<HTMLElement>(null);
   const retrySeconds = Math.max(0, Math.ceil((retryAt - now) / 1000));
+
+  useEffect(() => {
+    if (!resetNotice) return;
+    setMode('login'); setEmail(resetNotice.email); setPassword(''); setConfirmPassword(''); setCode(''); setError('');
+    setNotice('Пароль изменён. Войдите с новым паролем.');
+    cardRef.current?.scrollIntoView({ block: 'center' });
+  }, [resetNotice]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -89,7 +99,7 @@ export function AuthPanel({ session, initialMode = 'login', initialEmail = '', o
       await api.resetPassword(challenge.challengeId, code, password);
       setPassword(''); setConfirmPassword(''); setCode(''); setMode('login');
       setNotice('Пароль изменён. Войдите с новым паролем.');
-      onResetSession();
+      onResetSession(email);
     }
   });
   const resend = () => work(async () => {
@@ -110,9 +120,7 @@ export function AuthPanel({ session, initialMode = 'login', initialEmail = '', o
 
   const publicPage = !adminOnly && !onClose;
   const Heading = publicPage ? 'h2' : 'h1';
-  return <div className={`auth-shell ${onClose ? 'auth-shell--modal' : ''} ${publicPage ? 'auth-shell--public' : ''}`}>
-    {publicPage && <PublicIntro />}
-    <section id={publicPage ? 'start' : undefined} className="auth-card" role={onClose ? 'dialog' : undefined} aria-modal={onClose ? true : undefined} aria-label="Вход и регистрация">
+  const content = <section ref={cardRef} id={publicPage ? 'start' : undefined} className="auth-card" role={onClose ? 'dialog' : undefined} aria-modal={onClose ? true : undefined} aria-label="Вход и регистрация">
       {onClose && <button className="modal-close" type="button" aria-label="Вернуться к доске" disabled={busy} onClick={onClose}>×</button>}
       <div className="auth-brand"><img src="/favicon.svg" alt="" /><span>Bluvi<span>Board</span></span></div>
       {!adminOnly && ['login', 'register'].includes(mode) && <div className="auth-tabs">
@@ -148,6 +156,6 @@ export function AuthPanel({ session, initialMode = 'login', initialEmail = '', o
         <button className="guest-button" disabled={busy} onClick={() => { void work(async () => onDone(await api.guest())); }}>Продолжить как гость</button>
       </>}
       {adminOnly && <a className="auth-link" href="/">Вернуться на сайт</a>}
-    </section>
-  </div>;
+    </section>;
+  return embedded ? content : publicPage ? <PublicPage>{content}</PublicPage> : <div className={`auth-shell ${onClose ? 'auth-shell--modal' : ''}`}>{content}</div>;
 }

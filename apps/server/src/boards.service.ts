@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import type { Board, BoardSummary } from '@whiteboard/shared';
 import { DatabaseService } from './database.service';
 import { CreateBoardDto, UpdateBoardDto } from './boards.dto';
@@ -9,6 +10,7 @@ const summaryColumns = `id, title, revision, created_at AS "createdAt", updated_
 
 @Injectable()
 export class BoardsService {
+  readonly events = new EventEmitter();
   constructor(private readonly db: DatabaseService) {}
 
   async list(owner: AuthContext): Promise<BoardSummary[]> {
@@ -28,13 +30,15 @@ export class BoardsService {
   }
 
   async get(owner: AuthContext, id: string): Promise<Board> {
-    const result = await this.db.pool.query(`SELECT ${summaryColumns}, document FROM boards WHERE id = $1 AND owner_id = $2`, [id, owner.workspaceId]);
+    const result = await this.db.pool.query(`SELECT ${summaryColumns}, document, collaborative FROM boards WHERE id = $1 AND owner_id = $2`, [id, owner.workspaceId]);
     if (!result.rowCount) throw new NotFoundException('Доска не найдена');
     return result.rows[0];
   }
 
   async update(owner: AuthContext, id: string, dto: UpdateBoardDto): Promise<Board> {
     return this.db.transaction(async (client) => {
+      const current = await client.query('SELECT collaborative FROM boards WHERE id=$1 AND owner_id=$2 FOR UPDATE', [id, owner.workspaceId]);
+      if (current.rows[0]?.collaborative) throw new ConflictException('На доске включена совместная работа. Откройте доску заново для синхронизации.');
       const assetIds = [...new Set(dto.document.elements.flatMap((element) => element.kind === 'image' ? [element.assetId] : []))];
       if (assetIds.length) {
         const assets = await client.query('SELECT id FROM image_assets WHERE id = ANY($1::uuid[]) AND owner_id = $2 FOR KEY SHARE', [assetIds, owner.workspaceId]);
@@ -57,5 +61,6 @@ export class BoardsService {
   async delete(owner: AuthContext, id: string): Promise<void> {
     const result = await this.db.pool.query('DELETE FROM boards WHERE id = $1 AND owner_id = $2', [id, owner.workspaceId]);
     if (!result.rowCount) throw new NotFoundException('Доска не найдена');
+    this.events.emit('revoked', id);
   }
 }

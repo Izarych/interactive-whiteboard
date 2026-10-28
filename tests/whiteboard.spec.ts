@@ -87,7 +87,11 @@ test('floating controls leave the canvas full-height and sidebar collapse preser
     await expect(sidebar).toBeHidden();
     await expect.poll(async () => (await canvas.boundingBox())!.width).toBe(1440);
     // This stroke passes through the free space between the floating header and toolbar.
-    await draw(page, [365, 28], [400, 33]);
+    const header = (await page.locator('.board-info-panel').boundingBox())!;
+    const toolbar = (await page.getByRole('toolbar', { name: 'Инструменты рисования' }).boundingBox())!;
+    expect(toolbar.x - header.x - header.width).toBeGreaterThan(6);
+    const currentCanvas = (await canvas.boundingBox())!;
+    await draw(page, [header.x + header.width + 3 - currentCanvas.x, 28], [toolbar.x - 3 - currentCanvas.x, 33]);
     await expect(page.getByText('1 объектов', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Цвет и толщина', exact: true }).click();
     await draw(page, [100, 260], [220, 300]);

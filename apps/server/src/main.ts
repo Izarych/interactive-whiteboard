@@ -5,6 +5,7 @@ import { AppModule } from './app.module';
 import { json } from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
+import { CollaborationSocket } from './collaboration.socket';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
@@ -32,6 +33,7 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
 
   const port = process.env.PORT ?? 3000;
+  app.get(CollaborationSocket).attach(app.getHttpServer());
   if (process.env.NODE_ENV === 'production' && (process.env.COOKIE_SECURE !== 'true' || !webOrigin.startsWith('https://'))) throw new Error('Production requires HTTPS and secure cookies');
   await app.listen(port, process.env.HOST ?? '0.0.0.0');
   console.log(`API listening on http://localhost:${port}/api`);

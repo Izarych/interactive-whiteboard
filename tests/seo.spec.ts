@@ -7,7 +7,8 @@ test('public landing has indexable metadata, crawl files and sharing image; priv
   try {
     const html = await (await context.request.get('/')).text();
     expect(html).toContain('itemtype="https://schema.org/WebApplication"');
-    expect(html).toContain('Онлайн-доска для учёбы и рисования');
+    const headingHtml = html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/)?.[1] ?? '';
+    expect(headingHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()).toBe('Онлайн-доска для учёбы и рисования');
     expect(html).toContain('rel="canonical" href="https://bluviboard.ru/"');
     await page.goto('/');
     await expect(page).toHaveTitle('BluviBoard — онлайн-доска для учёбы и рисования');

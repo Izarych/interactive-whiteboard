@@ -25,23 +25,36 @@
     <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icon-180.png" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/src/landing.css" />
+    <link rel="stylesheet" href="/src/studio.css" />
     <title>BluviBoard — онлайн-доска для учёбы и рисования</title>
   </head>
   <body>
     <div id="root">
-      <main class="public-intro" itemscope itemtype="https://schema.org/WebApplication">
+      <div class="public-page public-bootstrap">
+        <header class="landing-nav">
+          <a class="landing-brand" href="/"><img src="/favicon.svg" width="34" height="34" alt="" /><span>BluviBoard<span class="brand-period">.</span></span></a>
+          <nav aria-label="Главная навигация"><a href="/dlya-ucheby/">Для учёбы</a><a class="landing-nav-login" href="#start">Войти в аккаунт ↗</a></nav>
+        </header>
+        <main class="landing-main">
+        <aside class="public-intro" itemscope itemtype="https://schema.org/WebApplication">
         <meta itemprop="name" content="BluviBoard" />
         <meta itemprop="applicationCategory" content="ProductivityApplication" />
         <meta itemprop="operatingSystem" content="Web" />
         <link itemprop="url" href="https://bluviboard.ru/" />
-        <p>BluviBoard</p>
-        <h1>Онлайн-доска для учёбы и рисования</h1>
+        <div class="landing-hero"><div class="landing-hero-copy">
+        <span class="landing-kicker"><span class="landing-live-dot"></span>ПРОСТРАНСТВО ДЛЯ ВАШИХ ИДЕЙ</span>
+        <h1>Онлайн-доска<br /> для <em>учёбы</em><br /> и рисования<span class="hero-period" aria-hidden="true"></span></h1>
         <p itemprop="description">Решайте задачи, рисуйте схемы и ведите конспекты от руки на интерактивной онлайн-доске BluviBoard. Добавляйте скриншоты, выбирайте фон в клетку и сохраняйте результат в PNG.</p>
-        <ul><li>Карандаш, маркер, фигуры и изображения</li><li>Клетка и точки с настройкой размера</li><li>Несколько досок и автосохранение</li><li>Гостевой вход и сохранение досок в аккаунте</li></ul>
-        <nav aria-label="Как использовать BluviBoard"><a href="/dlya-ucheby/">Доска для учёбы</a> · <a href="/doska-v-kletku/">Онлайн-доска в клетку</a></nav>
-        <p>Открываем приложение…</p>
-        <noscript>Для рисования и входа в BluviBoard включите JavaScript в браузере.</noscript>
-      </main>
+        <div class="landing-hero-actions"><a class="public-start-link" href="#start">Открыть доску ↗</a></div>
+        <p class="landing-guest-note">Без регистрации. Без лишних шагов.</p>
+        </div><div class="landing-preview"><div class="preview-window"><div class="preview-window-bar"><div class="preview-window-dots"><i></i><i></i><i></i></div><span>Моя следующая идея</span><span class="preview-demo-label">ИНТЕРАКТИВНОЕ ДЕМО</span></div><img class="preview-surface" src="/landing-preview.svg" width="640" height="430" alt="Набросок идеи, заметки и линии на доске" /></div><p class="preview-disclaimer">Открываем интерактивный холст…</p></div></div>
+        <nav class="public-guides" aria-label="Как использовать BluviBoard"><a href="/dlya-ucheby/"><strong>Доска для учёбы</strong></a><a href="/doska-v-kletku/"><strong>Онлайн-доска в клетку</strong></a></nav>
+        </aside>
+        <section id="start" class="auth-card auth-loading"><p>Открываем приложение…</p><noscript>Для рисования и входа в BluviBoard включите JavaScript в браузере.</noscript></section>
+        </main>
+      </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
