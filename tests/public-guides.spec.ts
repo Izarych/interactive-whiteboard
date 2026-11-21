@@ -2,8 +2,9 @@ import { test, expect } from '@playwright/test';
 import { cleanupWorkspaces } from './asset-test-utils.cjs';
 
 const guides = [
-  { path: '/dlya-ucheby/', heading: 'Онлайн-доска для учёбы и решения задач', title: 'Онлайн-доска для учёбы и решения задач — BluviBoard', image: '/guide-study.svg', question: 'Подходит ли доска для онлайн-уроков с репетитором?', answer: 'Совместного редактирования доски по ссылке сейчас нет' },
+  { path: '/dlya-ucheby/', heading: 'Онлайн-доска для учёбы и решения задач', title: 'Онлайн-доска для учёбы и решения задач — BluviBoard', image: '/guide-study.svg', question: 'Подходит ли доска для онлайн-уроков с репетитором?', answer: 'Ученик и преподаватель могут одновременно рисовать' },
   { path: '/doska-v-kletku/', heading: 'Онлайн-доска в клетку для математики и рисования', title: 'Онлайн-доска в клетку для математики и рисования — BluviBoard', image: '/guide-grid.svg', question: 'Попадает ли клетка в скачанный PNG?', answer: 'без клетки и точек' },
+  { path: '/dlya-repetitorov/', heading: 'Онлайн-доска для репетиторов и учеников', title: 'Онлайн-доска для репетиторов и учеников — BluviBoard', image: '/guide-study.svg', question: 'Нужен ли ученику аккаунт?', answer: 'Ученик открывает ссылку, которую отправил владелец' },
 ];
 
 for (const guide of guides) {

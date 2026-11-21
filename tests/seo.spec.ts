@@ -11,7 +11,7 @@ test('public landing has indexable metadata, crawl files and sharing image; priv
     expect(headingHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()).toBe('Онлайн-доска для учёбы и рисования');
     expect(html).toContain('rel="canonical" href="https://bluviboard.ru/"');
     await page.goto('/');
-    await expect(page).toHaveTitle('BluviBoard — онлайн-доска для учёбы и рисования');
+    await expect(page).toHaveTitle('Интерактивная онлайн-доска для обучения — BluviBoard');
     await expect(page.getByRole('heading', { name: 'Онлайн-доска для учёбы и рисования' })).toBeVisible();
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'index, follow');
     await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', 'https://bluviboard.ru/og-image.png');
@@ -41,6 +41,63 @@ test('public landing has indexable metadata, crawl files and sharing image; priv
     await expect(page.getByRole('button', { name: 'Забыли пароль?', exact: true })).toHaveCount(0);
   } finally {
     if (workspace) await cleanupWorkspaces([workspace], process.env.BB_E2E_IMAGE_DIRECTORY);
+  }
+});
+
+test('public learning content is identical with and without JavaScript and links to a real lesson guide', async ({ browser }) => {
+  const contents: string[] = [];
+  for (const javaScriptEnabled of [false, true]) {
+    const context = await browser.newContext({ baseURL: 'http://localhost:5174', javaScriptEnabled, viewport: { width: 360, height: 800 } });
+    try {
+      const page = await context.newPage();
+      await page.route('**/api/auth/session', (route) => route.fulfill({ json: { kind: 'anonymous', workspaceId: null, user: null } }));
+      await page.goto('/');
+      if (javaScriptEnabled) await expect(page.locator('.public-bootstrap')).toHaveCount(0);
+      const content = page.locator('.public-learning');
+      await expect(content).toHaveCount(1);
+      expect(await content.locator('ol li').first().evaluate((item) => getComputedStyle(item).display)).toBe('list-item');
+      expect(await content.locator('ol strong').first().evaluate((item) => getComputedStyle(item).display)).toBe('inline');
+      contents.push((await content.textContent())!.replace(/\s+/g, ' ').trim());
+      await content.getByText('Могут ли учитель и ученик рисовать одновременно?', { exact: true }).click();
+      await expect(content.getByText('Да. Владелец включает общий доступ', { exact: false })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(360);
+      await content.getByRole('link', { name: 'Как провести занятие на доске с репетитором →', exact: true }).click();
+      await expect(page).toHaveURL('/dlya-repetitorov/');
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Онлайн-доска для репетиторов и учеников');
+    } finally { await context.close(); }
+  }
+  expect(contents[0]).toBe(contents[1]);
+});
+
+test('public pages have distinct search metadata and factual structured data in the initial HTML', async ({ context }) => {
+  const titles = new Set<string>(), descriptions = new Set<string>();
+  for (const path of ['/', '/dlya-ucheby/', '/doska-v-kletku/', '/dlya-repetitorov/']) {
+    const response = await context.request.get(path);
+    expect(response.status()).toBe(200);
+    const html = await response.text();
+    const title = html.match(/<title>([^<]+)<\/title>/)![1];
+    const description = html.match(/name="description" content="([^"]+)"/)![1];
+    expect(titles.has(title)).toBe(false);
+    expect(descriptions.has(description)).toBe(false);
+    titles.add(title); descriptions.add(description);
+    expect(html.match(/<h1\b/g)).toHaveLength(1);
+    expect(html).not.toContain('Совместного редактирования доски по ссылке сейчас нет');
+    expect(html).not.toContain('<!-- public-learning -->');
+    const data = JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)![1]);
+    expect(data['@context']).toBe('https://schema.org');
+    const page = data['@graph'].find((item: { '@type': string }) => item['@type'] === 'WebPage');
+    expect(page).toMatchObject({ url: `https://bluviboard.ru${path}`, name: title, description, inLanguage: 'ru' });
+    expect(JSON.stringify(data)).not.toMatch(/aggregateRating|reviewCount|priceCurrency|SearchAction/);
+    if (path === '/') {
+      expect(data['@graph']).toEqual(expect.arrayContaining([expect.objectContaining({ '@type': 'WebSite', name: 'BluviBoard' }), expect.objectContaining({ '@type': 'WebApplication' })]));
+    } else {
+      const breadcrumbs = data['@graph'].find((item: { '@type': string }) => item['@type'] === 'BreadcrumbList');
+      expect(breadcrumbs.itemListElement.map((item: { item: string }) => item.item)).toEqual(['https://bluviboard.ru/', `https://bluviboard.ru${path}`]);
+    }
+    for (const match of html.matchAll(/(?:href|src)="(\/[^"#?]*)"/g)) {
+      const asset = await context.request.get(match[1]);
+      expect(asset.status(), `${path}: ${match[1]}`).toBe(200);
+    }
   }
 });
 

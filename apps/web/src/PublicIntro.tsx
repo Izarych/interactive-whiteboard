@@ -1,16 +1,17 @@
 import { ArrowDown, ArrowRight, ArrowUpRight, Check, Grid2X2, Layers3, PencilLine, Sparkles } from 'lucide-react';
 import { LandingPreview } from './LandingPreview';
+import publicLearning from './public-learning.html?raw';
 
 export function PublicIntro({ onStart, starting = false, startError = '' }: { onStart?: () => void; starting?: boolean; startError?: string }) {
-  return <aside className="public-intro" itemScope itemType="https://schema.org/WebApplication">
+  return <aside className="public-intro" itemScope itemType="https://schema.org/WebApplication" itemID="https://bluviboard.ru/#application">
     <meta itemProp="name" content="BluviBoard" />
-    <meta itemProp="applicationCategory" content="ProductivityApplication" />
+    <meta itemProp="applicationCategory" content="EducationalApplication" />
     <meta itemProp="operatingSystem" content="Web" />
     <link itemProp="url" href="https://bluviboard.ru/" />
     <div className="landing-hero">
       <div className="landing-hero-copy"><span className="landing-kicker"><span className="landing-live-dot" /> ПРОСТРАНСТВО ДЛЯ ВАШИХ ИДЕЙ</span>
         <h1>Онлайн-доска<br /> для <em>учёбы</em><br /> и рисования<span className="hero-period" aria-hidden="true" /></h1>
-        <p itemProp="description">Решайте задачи, рисуйте схемы и ведите конспекты от руки на интерактивной онлайн-доске BluviBoard. Добавляйте скриншоты, выбирайте фон в клетку и сохраняйте результат в PNG.</p>
+        <p itemProp="description">Решайте задачи, рисуйте схемы и ведите конспекты от руки на интерактивной онлайн-доске BluviBoard. Пригласите ученика по ссылке и рисуйте вместе в реальном времени. Клетка, скриншоты и экспорт в PNG — под рукой.</p>
         <div className="landing-hero-actions"><a className="public-start-link" href="#start" aria-busy={starting} onClick={onStart ? (event) => { event.preventDefault(); if (!starting) onStart(); } : undefined}>Открыть доску <ArrowUpRight size={19} /></a><a className="landing-explore" href="#possibilities">А что внутри? <ArrowDown size={15} /></a></div>
         {startError && <p className="landing-start-error" role="alert">{startError}</p>}
         <p className="landing-guest-note"><Check size={14} />Без регистрации. Без лишних шагов.</p>
@@ -31,5 +32,7 @@ export function PublicIntro({ onStart, starting = false, startError = '' }: { on
         <a href="/doska-v-kletku/"><span className="landing-guide-number">02 / РАЗОБРАТЬСЯ</span><strong>Онлайн-доска в клетку</strong><span>Как тетрадь, только с большим простором для мысли. Подберите разметку под свою задачу.</span><span className="landing-guide-link">Попробовать по клеточкам <ArrowRight size={17} /></span><ArrowUpRight className="landing-guide-arrow" size={25} /></a>
       </nav>
     </section>
+    {/* Trusted repository HTML, also included in the first response by Vite. */}
+    <div className="public-learning" dangerouslySetInnerHTML={{ __html: publicLearning }} />
   </aside>;
 }

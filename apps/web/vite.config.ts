@@ -6,7 +6,43 @@ import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Plugin } from 'vite';
 
-const guidePages = ['dlya-ucheby', 'doska-v-kletku'];
+const guidePages = ['dlya-ucheby', 'doska-v-kletku', 'dlya-repetitorov'];
+
+function publicContent(): Plugin {
+  return {
+    name: 'bluviboard-public-content',
+    transformIndexHtml: {
+      order: 'pre',
+      handler(html) {
+        // Use the same visible content before and after React starts.
+        html = html.replace('<!-- public-learning -->', () => `<div class="public-learning">${readFileSync(new URL('./src/public-learning.html', import.meta.url), 'utf8')}</div>`);
+        const url = html.match(/rel="canonical" href="([^"]+)"/)?.[1];
+        const name = html.match(/<title>([^<]+)<\/title>/)?.[1];
+        const description = html.match(/name="description" content="([^"]+)"/)?.[1];
+        if (!url || !name || !description) return html;
+        const home = 'https://bluviboard.ru/';
+        const graph: Record<string, unknown>[] = [
+          { '@type': 'WebPage', '@id': `${url}#page`, url, name, description, inLanguage: 'ru', isPartOf: { '@id': `${home}#website` } },
+        ];
+        if (url === home) {
+          graph.push(
+            { '@type': 'WebSite', '@id': `${home}#website`, url: home, name: 'BluviBoard', inLanguage: 'ru' },
+            { '@type': 'WebApplication', '@id': `${home}#application`, name: 'BluviBoard', url: home, description, applicationCategory: 'EducationalApplication', operatingSystem: 'Web', inLanguage: 'ru', featureList: ['Совместное рисование по ссылке', 'Вход без регистрации', 'Клетчатый фон', 'Геометрические фигуры', 'Экспорт PNG'] },
+          );
+        } else {
+          graph[0].breadcrumb = { '@id': `${url}#breadcrumbs` };
+          graph.push({ '@type': 'BreadcrumbList', '@id': `${url}#breadcrumbs`, itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Главная BluviBoard', item: home },
+            { '@type': 'ListItem', position: 2, name: name.replace(/ — BluviBoard$/, ''), item: url },
+          ] });
+        }
+        // No fabricated ratings, prices or promises of rich search results.
+        const data = JSON.stringify({ '@context': 'https://schema.org', '@graph': graph }).replace(/</g, '\\u003c');
+        return { html, tags: [{ tag: 'script', attrs: { type: 'application/ld+json' }, children: data, injectTo: 'head' }] };
+      },
+    },
+  };
+}
 
 function releaseNotes(version: string, desktop = false) {
   if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Invalid release version');
@@ -67,7 +103,7 @@ function pwaWorker(): Plugin {
 
 export default defineConfig({
   optimizeDeps: { include: ['@whiteboard/shared/board-operations'] },
-  plugins: [react(), pwaWorker()],
+  plugins: [react(), publicContent(), pwaWorker()],
   define: { __BLUVIBOARD_RELEASES__: JSON.stringify({ web: releaseNotes(webVersion), webHistory, desktop: desktopReleases }), __BLUVIBOARD_BUILD_ID__: JSON.stringify(buildId) },
   build: {
     commonjsOptions: { include: [/node_modules/, /packages[\\/]shared/] },
