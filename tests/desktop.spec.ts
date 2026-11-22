@@ -47,12 +47,41 @@ test('website links to the versioned Windows installer; native client hides inst
   await page.goto('/');
   const download = page.getByRole('link', { name: 'Скачать для Windows', exact: true });
   await expect(download).toHaveAttribute('href', `https://github.com/Izarych/interactive-whiteboard/releases/download/desktop-v${version}/BluviBoard-Setup-${version}-x64.exe`);
+  await expect(page.getByRole('link', { name: 'Mac · Apple Silicon', exact: true })).toHaveAttribute('href', new RegExp(`/BluviBoard-${version.replaceAll('.', '\\.')}-macOS-arm64\\.dmg$`));
+  await expect(page.getByRole('link', { name: 'Mac · Intel', exact: true })).toHaveAttribute('href', new RegExp(`/BluviBoard-${version.replaceAll('.', '\\.')}-macOS-x64\\.dmg$`));
   await expect(page.getByRole('button', { name: 'Установить BluviBoard', exact: true })).toBeVisible();
   await native(context);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'С возвращением' })).toBeVisible();
   await expect(download).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Mac · Apple Silicon', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Установить BluviBoard', exact: true })).toHaveCount(0);
+});
+
+test('macOS update checks select the native architecture and show a DMG rather than a Windows installer', async ({ page, context }) => {
+  await context.addInitScript(() => {
+    Object.defineProperties(window, {
+      __BLUVIBOARD_DESKTOP__: { value: true }, __BLUVIBOARD_DESKTOP_VERSION__: { value: '0.3.0' },
+      __BLUVIBOARD_DESKTOP_OS__: { value: 'macos' }, __BLUVIBOARD_DESKTOP_ARCH__: { value: 'aarch64' },
+    });
+  });
+  const downloadUrl = `https://github.com/Izarych/interactive-whiteboard/releases/download/desktop-v${version}/BluviBoard-${version}-macOS-arm64.dmg`;
+  await context.route('**/api/desktop/latest?*', route => {
+    const url = new URL(route.request().url());
+    expect(url.searchParams.get('platform')).toBe('macos');
+    expect(url.searchParams.get('arch')).toBe('arm64');
+    return route.fulfill({ json: { release: { version, downloadUrl, releaseUrl: `https://github.com/Izarych/interactive-whiteboard/releases/tag/desktop-v${version}` } } });
+  });
+  await page.goto('/');
+  const notice = page.getByRole('region', { name: 'Обновления macOS-клиента' });
+  await expect(notice).toContainText(`Доступен macOS-клиент ${version}`);
+  await expect(notice).not.toContainText('Windows');
+});
+
+test('update endpoint rejects unrecognized platform and architecture queries', async ({ request }) => {
+  for (const query of ['platform=linux', 'platform=macos&arch=invalid', 'redirect=https://untrusted.example']) {
+    expect((await request.get(`/api/desktop/latest?${query}`)).status()).toBe(400);
+  }
 });
 
 test('desktop close waits for uploads and finishes an active stroke before saving and calling native close', async ({ page, context }) => {

@@ -50,7 +50,7 @@ function publicContent(offline = false): Plugin {
 function releaseNotes(version: string, desktop = false) {
   if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Invalid release version');
   const text = readFileSync(new URL(`../../docs/releases/${desktop ? 'desktop/' : ''}${version}.md`, import.meta.url), 'utf8').trim();
-  const title = `BluviBoard${desktop ? ' для Windows' : ''} ${version}`;
+  const title = `BluviBoard${desktop ? compareVersions(version, '0.4.0') >= 0 ? ' для Windows и macOS' : ' для Windows' : ''} ${version}`;
   const [heading, ...lines] = text.split(/\r?\n/);
   const notes = lines.join('\n').trim();
   if (heading !== `# ${title}` || !notes) throw new Error(`Missing or mismatched release notes for ${title}`);

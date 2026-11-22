@@ -1,5 +1,5 @@
 import type { ActiveSession, Board, BoardSummary, DesktopRelease, EmailChallenge, ImageAsset, RegisterAccount, SessionInfo, ToolShortcuts, UpdateBoard, UserProfile } from '@whiteboard/shared';
-import { isOfflineDesktop } from './platform';
+import { desktopArch, isMacDesktop, isOfflineDesktop } from './platform';
 import { localRequest, storeLocalImage } from './offline-store';
 
 export class ApiError extends Error {
@@ -13,7 +13,7 @@ export function temporaryConnectionError(reason: unknown) {
 export async function request<T>(path: string, options?: RequestInit): Promise<T> {
   if (isOfflineDesktop) {
     try {
-      if (path === '/desktop/latest') return await (await import('./offline-cloud')).cloudRequest<T>(path);
+      if (path === '/desktop/latest' || /^\/desktop\/latest\?platform=macos&arch=(arm64|x64)$/.test(path)) return await (await import('./offline-cloud')).cloudRequest<T>(path);
       return await localRequest<T>(path, options);
     } catch (reason) {
       if (reason instanceof Error && 'status' in reason) throw new ApiError(reason.message, Number(reason.status));
@@ -45,7 +45,7 @@ export const api = {
   toolPanel: () => request<{ pinned: boolean }>('/preferences/tools/panel'),
   saveToolPanel: (pinned: boolean) => request<{ pinned: boolean }>('/preferences/tools/panel', { method: 'PUT', body: JSON.stringify({ pinned }) }),
   saveToolShortcuts: (shortcuts: ToolShortcuts) => request<{ shortcuts: ToolShortcuts }>('/preferences/tools', { method: 'PUT', body: JSON.stringify({ shortcuts }) }),
-  desktopRelease: () => request<{ release: DesktopRelease | null }>('/desktop/latest').then((result) => result.release),
+  desktopRelease: () => request<{ release: DesktopRelease | null }>(isMacDesktop ? `/desktop/latest?platform=macos&arch=${desktopArch}` : '/desktop/latest').then((result) => result.release),
   list: () => request<BoardSummary[]>('/boards'),
   create: (title: string) => request<Board>('/boards', { method: 'POST', body: JSON.stringify({ title }) }),
   get: (id: string) => request<Board>(`/boards/${id}`),

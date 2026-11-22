@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod cloud;
+mod diagnostics;
+mod files;
 mod navigation;
 
 use tauri::{
@@ -11,7 +13,10 @@ use tauri::{
 #[tauri::command]
 async fn desktop_close(window: WebviewWindow) -> Result<(), String> {
     // destroy() bypasses CloseRequested after the frontend has saved successfully.
-    window.destroy().map_err(|error| error.to_string())
+    window.destroy().map_err(|error| error.to_string())?;
+    #[cfg(target_os = "macos")]
+    window.app_handle().exit(0);
+    Ok(())
 }
 
 fn main() {
@@ -22,23 +27,27 @@ fn main() {
                 let _ = window.set_focus();
             }
         }))
-        .invoke_handler(tauri::generate_handler![desktop_close, cloud::desktop_cloud_request, cloud::desktop_cloud_upload])
+        .invoke_handler(tauri::generate_handler![desktop_close, cloud::desktop_cloud_request, cloud::desktop_cloud_upload, diagnostics::desktop_diagnostic, files::desktop_save_file])
         .setup(|app| {
             app.manage(cloud::Cloud::new(app.config().identifier.clone())?);
+            let diagnostic = diagnostics::Diagnostic::from_env()?;
             let diagnostic_downloads = std::env::var("BLUVIBOARD_DESKTOP_DEBUG_PORT")
                 .ok().and_then(|value| value.parse::<u16>().ok()).filter(|port| *port != 0)
                 .and_then(|_| std::env::var_os("BLUVIBOARD_DESKTOP_TEST_DATA_DIR"))
                 .map(std::path::PathBuf::from).filter(|path| path.is_absolute())
-                .map(|path| path.join("downloads"));
+                .map(|path| path.join("downloads"))
+                .or_else(|| diagnostic.profile.as_ref().map(|path| path.join("downloads")));
             if let Some(path) = &diagnostic_downloads { std::fs::create_dir_all(path)?; }
             let mut window = WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
                 .initialization_script(
-                    format!("if (window === window.top && ['https://bluviboard.ru', 'https://tauri.localhost', 'tauri://localhost'].includes(location.origin)) {{\
+                    format!("if (window === window.top && (['https://bluviboard.ru', 'https://tauri.localhost'].includes(location.origin) || (location.protocol === 'tauri:' && location.hostname === 'localhost'))) {{\
                       Object.defineProperty(window, '__BLUVIBOARD_DESKTOP__', {{ value: true }});\
                       Object.defineProperty(window, '__BLUVIBOARD_DESKTOP_VERSION__', {{ value: '{}' }});\
                       if (location.origin !== 'https://bluviboard.ru') Object.defineProperty(window, '__BLUVIBOARD_OFFLINE__', {{ value: true }});\
                       Object.defineProperty(window, '__BLUVIBOARD_PREVIEW__', {{ value: {} }});\
-                    }}", env!("CARGO_PKG_VERSION"), app.config().identifier.ends_with(".preview")),
+                      Object.defineProperty(window, '__BLUVIBOARD_DESKTOP_OS__', {{ value: '{}' }});\
+                      Object.defineProperty(window, '__BLUVIBOARD_DESKTOP_ARCH__', {{ value: '{}' }});\
+                    }}", env!("CARGO_PKG_VERSION"), app.config().identifier.ends_with(".preview"), std::env::consts::OS, std::env::consts::ARCH),
                 )
                 .on_navigation(|url| {
                     if navigation::is_board(url) || navigation::is_launcher(url) {
@@ -67,6 +76,32 @@ fn main() {
                     }
                     true
                 });
+            if let Some(script) = &diagnostic.script { window = window.initialization_script(script); }
+            #[cfg(target_os = "macos")]
+            if let Some(id) = diagnostic.store_id { window = window.data_store_identifier(id); }
+            app.manage(diagnostic);
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+                let quit = MenuItem::with_id(app, "safe-quit", "Завершить BluviBoard", true, Some("CmdOrCtrl+Q"))?;
+                let app_menu = Submenu::with_items(app, "BluviBoard", true, &[
+                    &PredefinedMenuItem::about(app, None, None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &quit,
+                ])?;
+                let edit = Submenu::with_items(app, "Правка", true, &[
+                    &PredefinedMenuItem::undo(app, None)?, &PredefinedMenuItem::redo(app, None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::cut(app, None)?, &PredefinedMenuItem::copy(app, None)?,
+                    &PredefinedMenuItem::paste(app, None)?, &PredefinedMenuItem::select_all(app, None)?,
+                ])?;
+                app.set_menu(Menu::with_items(app, &[&app_menu, &edit])?)?;
+                app.on_menu_event(|app, event| {
+                    if event.id().as_ref() == "safe-quit" {
+                        if let Some(window) = app.get_webview_window("main") { let _ = window.close(); }
+                    }
+                });
+            }
             // WebView2 150+ ignores its environment arguments for elevated hosts.
             // Pass our explicitly requested diagnostics through the WebView2 API.
             if let Some(port) = std::env::var("BLUVIBOARD_DESKTOP_DEBUG_PORT")
@@ -104,6 +139,17 @@ fn main() {
                 }
             }
         })
-        .run(tauri::generate_context!())
-        .expect("failed to run BluviBoard");
+        .build(tauri::generate_context!())
+        .expect("failed to build BluviBoard")
+        .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::ExitRequested { code: None, api, .. } = event {
+                if let Some(window) = app.get_webview_window("main") {
+                    api.prevent_exit();
+                    let _ = window.close();
+                }
+            }
+            #[cfg(not(target_os = "macos"))]
+            let _ = (app, event);
+        });
 }

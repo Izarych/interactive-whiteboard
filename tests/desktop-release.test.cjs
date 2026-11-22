@@ -27,6 +27,27 @@ test('only fully uploaded installers from this repository are advertised', () =>
   assert.throws(() => latestDesktopRelease({ error: 'unavailable' }), /Invalid release response/);
 });
 
+function macRelease(version, arch) {
+  const name = `BluviBoard-${version}-macOS-${arch}.dmg`;
+  return release(version, { assets: [{ name, state: 'uploaded', size: 1024, browser_download_url: `https://github.com/Izarych/interactive-whiteboard/releases/download/desktop-v${version}/${name}` }] });
+}
+test('Mac updates select only the matching architecture and never offer an exe', () => {
+  const releases = [release('9.0.0'), macRelease('0.4.0', 'arm64'), macRelease('0.5.0', 'x64')];
+  assert.equal(latestDesktopRelease(releases, 'macos', 'arm64').version, '0.4.0');
+  assert.equal(latestDesktopRelease(releases, 'macos', 'x64').version, '0.5.0');
+  assert.equal(latestDesktopRelease(releases, 'windows', 'x64').version, '9.0.0');
+  assert.equal(latestDesktopRelease([release('9.0.0')], 'macos', 'arm64'), null);
+  assert.equal(latestDesktopRelease(releases, 'windows', 'arm64'), null);
+});
+test('concurrent platforms share one upstream fetch without sharing the chosen installer', async (t) => {
+  let requests = 0;
+  t.mock.method(globalThis, 'fetch', async () => { requests++; return Response.json([release('0.3.0'), macRelease('0.4.0', 'arm64'), macRelease('0.5.0', 'x64')]); });
+  const service = new DesktopReleaseService();
+  const results = await Promise.all([service.latest(), service.latest('macos', 'arm64'), service.latest('macos', 'x64')]);
+  assert.equal(requests, 1);
+  assert.deepEqual(results.map(item => item.version), ['0.3.0', '0.4.0', '0.5.0']);
+});
+
 test('an unpublished Windows release has an explicit JSON envelope', async () => {
   const controller = new DesktopReleaseController({ latest: async () => null });
   assert.deepEqual(await controller.latest(), { release: null });

@@ -20,7 +20,8 @@ const historyVersions = readdirSync('docs/releases').filter(name => /^\d+\.\d+\.
 const historyTitles = historyVersions.map(version => `BluviBoard ${version}`);
 const historySections = historyVersions.map(version => readFileSync(`docs/releases/${version}.md`, 'utf8').match(/^## (.+)$/m)![1]);
 const nativeHistoryTitles = readdirSync('docs/releases/desktop').filter(name => /^\d+\.\d+\.\d+\.md$/.test(name)).map(name => name.slice(0, -3))
-  .filter(version => compareVersions(version, nativeVersion) <= 0).sort((a, b) => compareVersions(b, a)).slice(0, 3).map(version => `BluviBoard для Windows ${version}`);
+  .filter(version => compareVersions(version, nativeVersion) <= 0).sort((a, b) => compareVersions(b, a)).slice(0, 3).map(version => readFileSync(`docs/releases/desktop/${version}.md`, 'utf8').split(/\r?\n/)[0].slice(2));
+const nativeTitle = nativeHistoryTitles[0];
 
 test('a newer browser version shows bundled notes, remembers dismissal, and allows reopening on mobile', async ({ page }) => {
   await page.goto('/');
@@ -97,7 +98,7 @@ test('Windows shell upgrades show notes for the installed shell independently of
   await page.evaluate((key) => localStorage.setItem(key, '0.1.0'), nativeKey);
   await page.reload();
   const dialog = page.getByRole('dialog', { name: 'Что нового', exact: true });
-  await expect(dialog.getByRole('heading', { name: `BluviBoard для Windows ${nativeVersion}`, exact: true })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: nativeTitle, exact: true })).toBeVisible();
   await expect(dialog.locator('article > h3')).toHaveText([...historyTitles, ...nativeHistoryTitles]);
   await expect(dialog).toContainText('Автоматическая проверка Windows-обновлений');
   await dialog.getByRole('button', { name: 'Понятно', exact: true }).click();

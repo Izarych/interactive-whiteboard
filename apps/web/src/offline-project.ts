@@ -2,6 +2,7 @@ import type { Board, BoardDocument, DrawingElement } from '@whiteboard/shared';
 import { createLocalBoard, localAssets, localChanged, localProfile, recordKey } from './offline-store';
 import type { LocalAsset } from './offline-store';
 import { imageBase64, imageBlob } from './offline-cloud';
+import { saveFile } from './desktop-files';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const number = (value: unknown, min: number, max: number) => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
@@ -39,11 +40,7 @@ export async function exportLocalProject(board: Board) {
     assets.push({ id, mime: asset.blob.type, data: await imageBase64(asset.blob) });
   }
   const blob = new Blob([JSON.stringify({ format: 'BluviBoard', version: 1, title: board.title, document: board.document, assets })], { type: 'application/json' });
-  const url = URL.createObjectURL(blob), link = document.createElement('a');
-  link.download = `${board.title.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').slice(0, 100) || 'Доска'}.bluviboard`;
-  link.href = url;
-  link.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+  await saveFile(blob, `${board.title.slice(0, 100) || 'Доска'}.bluviboard`);
 }
 export async function importLocalProject(file: File) {
   if (file.size > 200 * 1024 * 1024) throw new Error('Файл доски должен быть меньше 200 МБ');

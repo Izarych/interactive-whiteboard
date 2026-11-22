@@ -289,10 +289,9 @@ function Editor({ initial, onCopy, editorRef, disabled, sidebarCollapsed, onTogg
       context.fillStyle = '#ffffff';
       context.fillRect(0, 0, canvas.width, canvas.height);
       context.drawImage(stage.toCanvas({ pixelRatio: 2 }), 0, 0);
-      const link = document.createElement('a');
-      link.download = `${board.title.trim() || 'Доска'}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
+      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('Не удалось создать PNG')), 'image/png'));
+      const { saveFile } = await import('./desktop-files');
+      await saveFile(blob, `${board.title.trim().slice(0, 100) || 'Доска'}.png`);
     } catch (reason) {
       setImageError(errorMessage(reason));
     } finally {

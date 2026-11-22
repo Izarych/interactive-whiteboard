@@ -6,19 +6,25 @@ import { emailCode, cleanupMail } from './mailhog-utils.cjs';
 import { cleanupWorkspaces } from './asset-test-utils.cjs';
 
 const password = 'Offline-desktop-test-123';
-async function offline(context: BrowserContext, bridge = false) {
-  await context.addInitScript(({ bridge }) => {
+async function offline(context: BrowserContext, bridge = false, mac = false) {
+  await context.addInitScript(({ bridge, mac }) => {
     const target = window as Window & {
       nativeCloses: number;
+      nativeFiles: { name: string; data: string }[];
       __TAURI_INTERNALS__: { invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown> };
     };
     Object.defineProperty(window, '__BLUVIBOARD_DESKTOP__', { value: true });
     Object.defineProperty(window, '__BLUVIBOARD_DESKTOP_VERSION__', { value: '0.2.0' });
     Object.defineProperty(window, '__BLUVIBOARD_OFFLINE__', { value: true });
+    if (mac) Object.defineProperty(window, '__BLUVIBOARD_DESKTOP_OS__', { value: 'macos' });
     Object.defineProperty(navigator, 'onLine', { get: () => false });
     target.nativeCloses = 0;
+    target.nativeFiles = [];
     target.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
       if (command === 'desktop_close') { target.nativeCloses += 1; return; }
+      if (mac && command === 'desktop_save_file') {
+        target.nativeFiles.push({ name: String(args.name), data: String(args.data) }); return true;
+      }
       if (!bridge || localStorage.getItem('test:cloud-down')) throw new Error('Test cloud unavailable');
       let response: Response;
       if (command === 'desktop_cloud_upload') {
@@ -43,8 +49,31 @@ async function offline(context: BrowserContext, bridge = false) {
       }
       return { status: response.status, body: response.status === 204 ? null : await response.json() };
     } };
-  }, { bridge });
+  }, { bridge, mac });
 }
+
+test('Mac offline exports use the native save bridge and contain the document and embedded image', async ({ page, context }) => {
+  await offline(context, false, true);
+  await context.route('**/api/**', route => route.abort());
+  await page.goto('/'); await create(page);
+  await draw(page);
+  const image = await sharp({ create: { width: 80, height: 60, channels: 3, background: '#2563eb' } }).png().toBuffer();
+  await page.getByLabel('Загрузить изображения').setInputFiles({ name: 'offline.png', mimeType: 'image/png', buffer: image });
+  await expect(page.getByText('2 объектов', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Действия доски', exact: true }).click();
+  await page.getByRole('button', { name: 'Сохранить файл доски', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as Window & { nativeFiles: unknown[] }).nativeFiles.length)).toBe(1);
+  await page.getByRole('button', { name: 'Действия доски', exact: true }).click();
+  await page.getByRole('button', { name: 'Скачать PNG', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as Window & { nativeFiles: unknown[] }).nativeFiles.length)).toBe(2);
+  const files = await page.evaluate(() => (window as Window & { nativeFiles: { name: string; data: string }[] }).nativeFiles);
+  const project = JSON.parse(Buffer.from(files[0].data, 'base64').toString());
+  expect(project.document.elements).toHaveLength(2);
+  expect(project.assets[0].data).toBe(image.toString('base64'));
+  expect(files[0].name).toMatch(/\.bluviboard$/);
+  expect(files[1].name).toMatch(/\.png$/);
+  expect((await sharp(Buffer.from(files[1].data, 'base64')).metadata()).width).toBeGreaterThan(500);
+});
 async function draw(page: Page, y = 220, finish = true) {
   const box = (await page.getByTestId('canvas').boundingBox())!;
   await page.mouse.move(box.x + 100, box.y + y);

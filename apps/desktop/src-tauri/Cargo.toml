@@ -1,7 +1,7 @@
 [package]
 name = "bluviboard-desktop"
-version = "0.3.0"
-description = "BluviBoard Windows client"
+version = "0.4.0"
+description = "BluviBoard offline desktop client"
 authors = ["Artyom Plyusch"]
 edition = "2021"
 license = "MIT"
@@ -22,6 +22,9 @@ base64 = "0.22"
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", default-features = false, features = ["windows-native"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", default-features = false, features = ["apple-native"] }
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

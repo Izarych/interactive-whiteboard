@@ -4,6 +4,8 @@ fn main() {
             "desktop_close",
             "desktop_cloud_request",
             "desktop_cloud_upload",
+            "desktop_diagnostic",
+            "desktop_save_file",
         ]),
     ))
     .expect("failed to build desktop resources");

@@ -29,6 +29,12 @@ jobs:
           notes="docs/releases/${VERSION}.md"
           test -f "$notes"
           gh release create "$VERSION" --verify-tag --latest --title "BluviBoard ${VERSION}" --notes-file "$notes"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: { node-version: '24.15.0' }
+      - name: Attach available desktop installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node apps/desktop/scripts/sync-release-assets.cjs "${{ github.ref_name }}"
       - name: Remove legacy deployment releases and their tags
         if: github.ref_name == '1.0.0'
         env:

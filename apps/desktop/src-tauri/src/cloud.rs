@@ -42,9 +42,15 @@ fn uuid(value: &str) -> bool {
 
 fn allowed(method: &str, path: &str) -> bool {
     match (method, path) {
-        ("GET", "/auth/session" | "/boards" | "/desktop/latest" | "/desktop/sync-capabilities") => {
-            true
-        }
+        (
+            "GET",
+            "/auth/session"
+            | "/boards"
+            | "/desktop/latest"
+            | "/desktop/latest?platform=macos&arch=arm64"
+            | "/desktop/latest?platform=macos&arch=x64"
+            | "/desktop/sync-capabilities",
+        ) => true,
         ("POST", "/auth/login" | "/auth/logout") => true,
         ("GET", path) if path.starts_with("/boards/") => uuid(&path[8..]),
         ("GET", path) if path.starts_with("/assets/") => uuid(&path[8..]),
@@ -53,13 +59,13 @@ fn allowed(method: &str, path: &str) -> bool {
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 fn credential(scope: &str) -> Result<keyring::Entry, String> {
     keyring::Entry::new(scope, "cloud-session").map_err(|error| error.to_string())
 }
 
 fn load_token(persistent: bool, scope: &str) -> Option<String> {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     if persistent {
         return credential(scope)
             .ok()
@@ -71,7 +77,7 @@ fn load_token(persistent: bool, scope: &str) -> Option<String> {
 }
 
 fn remember_token(persistent: bool, scope: &str, token: Option<&str>) -> Option<String> {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     if persistent {
         let result = credential(scope).and_then(|entry| match token {
             Some(value) => entry.set_password(value).map_err(|error| error.to_string()),
@@ -81,7 +87,7 @@ fn remember_token(persistent: bool, scope: &str, token: Option<&str>) -> Option<
             },
         });
         if result.is_err() {
-            return Some("Не удалось обновить защищённое хранилище Windows. Сессия действует только до закрытия программы.".into());
+            return Some("Не удалось обновить системное защищённое хранилище. Сессия действует только до закрытия программы.".into());
         }
     }
     let _ = (persistent, scope, token);
@@ -118,6 +124,11 @@ impl Cloud {
         body: Option<Value>,
         upload: Option<(Vec<u8>, String)>,
     ) -> Result<CloudResponse, String> {
+        if cfg!(target_os = "macos")
+            && std::env::var("BLUVIBOARD_DESKTOP_SMOKE").as_deref() == Ok("1")
+        {
+            return Err("Облако отключено для нативной оффлайн-проверки".into());
+        }
         let token = self.token()?;
         let mut warning = None;
         if path == "/auth/logout" {
@@ -265,6 +276,11 @@ mod tests {
         let id = "4cb38919-e9ce-4466-b057-2ed20c187cad";
         assert!(allowed("PUT", &format!("/desktop/boards/{id}")));
         assert!(allowed("GET", &format!("/assets/{id}")));
+        assert!(allowed("GET", "/desktop/latest?platform=macos&arch=arm64"));
+        assert!(!allowed(
+            "GET",
+            "/desktop/latest?platform=macos&arch=arm64&url=https://evil.example"
+        ));
         for path in [
             "https://evil.example/",
             "//evil.example/",
@@ -283,5 +299,24 @@ mod tests {
         assert!(valid_token(&"x".repeat(43)));
         assert!(!valid_token("token\r\nX-Evil: yes"));
         assert!(!valid_token(&"x".repeat(44)));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_keychain_round_trip_uses_a_separate_diagnostic_entry() {
+        let scope = format!(
+            "ru.bluviboard.ci.{}.{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let entry = credential(&scope).unwrap();
+        entry.set_password("diagnostic-not-a-real-session").unwrap();
+        let loaded = entry.get_password();
+        let removed = entry.delete_credential();
+        assert_eq!(loaded.unwrap(), "diagnostic-not-a-real-session");
+        removed.unwrap();
     }
 }
