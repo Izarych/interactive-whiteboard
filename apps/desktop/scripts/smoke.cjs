@@ -66,7 +66,9 @@ async function main() {
   assert(fs.existsSync(path.join(root, 'apps/desktop/ui/index.html')), 'Bundled editor must exist');
   child = launch();
   await connect();
-  await expect(page.getByRole('button', { name: '+ Новая доска', exact: true })).toBeVisible();
+  // A fresh WebView2 profile on a shared CI runner can spend more than five
+  // seconds initializing IndexedDB. Still require the real offline workspace.
+  await expect(page.getByRole('button', { name: '+ Новая доска', exact: true })).toBeVisible({ timeout: 60000 });
   assert.match(page.url(), /^(https:\/\/tauri\.localhost|tauri:\/\/localhost)\//);
   assert.equal(await page.evaluate(() => window.__BLUVIBOARD_OFFLINE__), true);
   assert.equal(await page.evaluate(() => window.__BLUVIBOARD_DESKTOP_VERSION__), version);
