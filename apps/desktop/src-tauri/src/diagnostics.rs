@@ -57,7 +57,7 @@ pub async fn desktop_diagnostic(
     diagnostic: tauri::State<'_, Diagnostic>,
     action: String,
     result: Value,
-) -> Result<(), String> {
+) -> Result<Value, String> {
     let profile = diagnostic
         .profile
         .as_ref()
@@ -73,9 +73,25 @@ pub async fn desktop_diagnostic(
             if action == "failure" {
                 window.app_handle().exit(1);
             }
-            Ok(())
+            Ok(Value::Null)
         }
-        "close" => window.close().map_err(|e| e.to_string()),
+        "exports" => {
+            let mut files = std::fs::read_dir(profile.join("downloads"))
+                .map_err(|e| e.to_string())?
+                .filter_map(Result::ok)
+                .filter(|entry| entry.path().is_file())
+                .filter_map(|entry| entry.file_name().into_string().ok())
+                .filter(|name| name.ends_with(".png") || name.ends_with(".bluviboard"))
+                .collect::<Vec<_>>();
+            files.sort();
+            Ok(
+                serde_json::json!({ "files": files, "cloudRequests": crate::cloud::DIAGNOSTIC_NETWORK_ATTEMPTS.load(std::sync::atomic::Ordering::Relaxed) }),
+            )
+        }
+        "close" => window
+            .close()
+            .map(|_| Value::Null)
+            .map_err(|e| e.to_string()),
         _ => Err("Unknown diagnostic action".into()),
     }
 }

@@ -4,7 +4,7 @@
   const assert = (value, message) => { if (!value) throw new Error(message); };
   const wait = async (condition, message) => {
     const end = Date.now() + 60000;
-    while (Date.now() < end) { const value = condition(); if (value) return value; await sleep(50); }
+    while (Date.now() < end) { const value = await condition(); if (value) return value; await sleep(50); }
     throw new Error(`Timed out: ${message}`);
   };
   const button = label => [...document.querySelectorAll('button')].find(node => !node.disabled && (node.getAttribute('aria-label') === label || node.textContent.trim() === label));
@@ -41,7 +41,7 @@
     // provide. Only pointer capture is shimmed; the real canvas/editor handles it.
     Element.prototype.setPointerCapture = () => {};
     Element.prototype.releasePointerCapture = () => {};
-    const exports = [], network = [], errors = [];
+    const network = [], errors = [];
     window.addEventListener('error', event => errors.push(event.message));
     const fetchOriginal = window.fetch.bind(window);
     window.fetch = (url, ...options) => {
@@ -51,13 +51,14 @@
       return fetchOriginal(url, ...options);
     };
     const invokeOriginal = window.__TAURI_INTERNALS__.invoke.bind(window.__TAURI_INTERNALS__);
-    window.__TAURI_INTERNALS__.invoke = async (command, args, ...rest) => {
-      if (command === 'desktop_cloud_request' || command === 'desktop_cloud_upload') network.push(command);
-      const result = await invokeOriginal(command, args, ...rest);
-      if (command === 'desktop_save_file') exports.push(args.name);
-      return result;
+    // Tauri deliberately defines invoke as non-writable. Observe the real
+    // diagnostic export directory instead of monkey-patching a protected API.
+    const nativeState = () => invokeOriginal('desktop_diagnostic', { action: 'exports', result: null });
+    const report = async result => {
+      const native = await nativeState();
+      assert(native.cloudRequests === 0, 'Native bridge attempted network access');
+      return invokeOriginal('desktop_diagnostic', { action: 'report', result: { phase: window.__BLUVIBOARD_SMOKE_PHASE__, ...result, exports: native.files, cloudRequests: native.cloudRequests, errors, network } });
     };
-    const report = result => invokeOriginal('desktop_diagnostic', { action: 'report', result: { phase: window.__BLUVIBOARD_SMOKE_PHASE__, ...result, errors, network } });
     const close = () => invokeOriginal('desktop_diagnostic', { action: 'close', result: null });
     const saved = () => wait(() => text('Сохранено на компьютере'), 'strict local disk save');
     const phase = window.__BLUVIBOARD_SMOKE_PHASE__;
@@ -75,10 +76,10 @@
       await saved();
       button('Действия доски').click();
       (await wait(() => button('Сохранить файл доски'), 'project export menu')).click();
-      await wait(() => exports.some(name => name.endsWith('.bluviboard')), 'native project export');
+      await wait(async () => (await nativeState()).files.some(name => name.endsWith('.bluviboard')), 'native project export');
       button('Действия доски').click();
       (await wait(() => button('Скачать PNG'), 'PNG export menu')).click();
-      await wait(() => exports.some(name => name.endsWith('.png')), 'native PNG export');
+      await wait(async () => (await nativeState()).files.some(name => name.endsWith('.png')), 'native PNG export');
       button('Ластик').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 }));
       const hotkey = await wait(() => document.querySelector('input[aria-label="Хоткей: Ластик"]'), 'hotkey settings');
       hotkey.focus(); key(hotkey);
@@ -87,7 +88,7 @@
       button('Карандаш').click();
       await wait(() => button('Карандаш')?.getAttribute('aria-pressed') === 'true', 'pencil before closing stroke');
       await draw(false);
-      await report({ status: 'passed', exports, activeStrokeOnClose: true });
+      await report({ status: 'passed', activeStrokeOnClose: true });
       await close();
     } else {
       await wait(() => document.querySelector('input[aria-label="Название доски"]')?.value === 'Native macOS offline', 'board after native restart');

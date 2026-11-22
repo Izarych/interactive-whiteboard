@@ -7,6 +7,8 @@ use std::time::Duration;
 
 const ORIGIN: &str = "https://bluviboard.ru";
 const LIMIT: usize = 24 * 1024 * 1024;
+pub static DIAGNOSTIC_NETWORK_ATTEMPTS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
 
 pub struct Cloud {
     client: Client,
@@ -127,6 +129,7 @@ impl Cloud {
         if cfg!(target_os = "macos")
             && std::env::var("BLUVIBOARD_DESKTOP_SMOKE").as_deref() == Ok("1")
         {
+            DIAGNOSTIC_NETWORK_ATTEMPTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             return Err("Облако отключено для нативной оффлайн-проверки".into());
         }
         let token = self.token()?;

@@ -30,11 +30,13 @@ async function phase(name, project) {
   fs.writeFileSync(path.join(artifacts, `macos-${name}.log`), output);
   const file = path.join(profile, `${name}.json`);
   const result = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : { status: 'missing report', output };
+  result.downloads = fs.readdirSync(path.join(profile, 'downloads')).map(file => ({ name: file, size: fs.statSync(path.join(profile, 'downloads', file)).size }));
   fs.writeFileSync(path.join(artifacts, `macos-${name}.json`), JSON.stringify(result, null, 2));
   assert.equal(code, 0, JSON.stringify(result));
   assert.equal(result.status, 'passed', JSON.stringify(result));
   assert.deepEqual(result.errors, []);
   assert.deepEqual(result.network, []);
+  assert.equal(result.cloudRequests, 0);
   console.log(`WKWebView ${name}: passed`);
 }
 (async () => {
