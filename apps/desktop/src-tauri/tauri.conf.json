@@ -4,9 +4,9 @@
   "version": "../package.json",
   "identifier": "ru.bluviboard.desktop",
   "build": {
-    "frontendDist": "../launcher",
-    "beforeDevCommand": "node scripts/prepare.cjs",
-    "beforeBuildCommand": "node scripts/prepare.cjs"
+    "frontendDist": "../ui",
+    "beforeDevCommand": "node scripts/prepare.cjs && npm run build:offline",
+    "beforeBuildCommand": "node scripts/prepare.cjs && npm run build:offline"
   },
   "app": {
     "windows": [{
@@ -22,8 +22,8 @@
       "dragDropEnabled": false
     }],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://bluviboard.ru",
-      "capabilities": ["desktop-close"]
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ipc: https://ipc.localhost; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'self'",
+      "capabilities": ["desktop-close", "offline-cloud"]
     }
   },
   "bundle": {
@@ -37,7 +37,7 @@
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
     "windows": {
       "allowDowngrades": false,
-      "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true },
+      "webviewInstallMode": { "type": "offlineInstaller", "silent": true },
       "nsis": {
         "installMode": "currentUser",
         "languages": ["Russian", "English"],

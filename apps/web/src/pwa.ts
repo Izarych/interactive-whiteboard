@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { errorMessage } from './api';
-import { isDesktop } from './platform';
+import { isDesktop, isOfflineDesktop } from './platform';
 
 interface InstallPrompt extends Event {
   prompt: () => Promise<void>;
@@ -59,12 +59,14 @@ export async function prepareToLeave() {
 }
 export const isPwaUpdating = () => state.updating;
 export async function checkPwaUpdate() {
+  if (isOfflineDesktop) return;
   if (!('serviceWorker' in navigator)) return;
   const registration = await navigator.serviceWorker.getRegistration('/');
   await registration?.update();
 }
 
 export function startPwa() {
+  if (isOfflineDesktop) return;
   if (started) return;
   started = true;
   window.addEventListener('beforeinstallprompt', (event) => {

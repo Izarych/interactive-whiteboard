@@ -8,12 +8,15 @@ import type { Plugin } from 'vite';
 
 const guidePages = ['dlya-ucheby', 'doska-v-kletku', 'dlya-repetitorov'];
 
-function publicContent(): Plugin {
+function publicContent(offline = false): Plugin {
   return {
     name: 'bluviboard-public-content',
     transformIndexHtml: {
       order: 'pre',
       handler(html) {
+        if (offline) return html.replace(/<div id="root">[\s\S]*<\/div>\s*(?=<script type="module")/, '<div id="root"><main class="auth-shell"><section class="auth-card"><h1>BluviBoard</h1><p>Открываем локальные доски…</p></section></main></div>\n')
+          .replace(/<title>[^<]+<\/title>/, '<title>BluviBoard — локальные доски</title>')
+          .replace('name="robots" content="index, follow"', 'name="robots" content="noindex, nofollow"');
         // Use the same visible content before and after React starts.
         html = html.replace('<!-- public-learning -->', () => `<div class="public-learning">${readFileSync(new URL('./src/public-learning.html', import.meta.url), 'utf8')}</div>`);
         const url = html.match(/rel="canonical" href="([^"]+)"/)?.[1];
@@ -101,14 +104,16 @@ function pwaWorker(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   optimizeDeps: { include: ['@whiteboard/shared/board-operations'] },
-  plugins: [react(), publicContent(), pwaWorker()],
+  plugins: [react(), publicContent(mode === 'desktop'), ...(mode === 'desktop' ? [] : [pwaWorker()])],
   define: { __BLUVIBOARD_RELEASES__: JSON.stringify({ web: releaseNotes(webVersion), webHistory, desktop: desktopReleases }), __BLUVIBOARD_BUILD_ID__: JSON.stringify(buildId) },
   build: {
+    outDir: mode === 'desktop' ? '../desktop/ui' : 'dist',
+    emptyOutDir: true,
     commonjsOptions: { include: [/node_modules/, /packages[\\/]shared/] },
     rollupOptions: {
-      input: Object.fromEntries(['index', ...guidePages].map((name) => [name, fileURLToPath(new URL(name === 'index' ? './index.html' : `./${name}/index.html`, import.meta.url))])),
+      input: Object.fromEntries(['index', ...(mode === 'desktop' ? [] : guidePages)].map((name) => [name, fileURLToPath(new URL(name === 'index' ? './index.html' : `./${name}/index.html`, import.meta.url))])),
     },
   },
   server: {
@@ -118,4 +123,4 @@ export default defineConfig({
       '/sitemap.xml': process.env.API_PROXY_TARGET ?? 'http://localhost:3000',
     },
   },
-});
+}));

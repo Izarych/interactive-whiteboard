@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import type { DesktopRelease } from '@whiteboard/shared';
 import { api, errorMessage } from './api';
 import { checkPwaUpdate, isPwaUpdating, prepareToLeave } from './pwa';
-import { desktopVersion, isDesktop } from './platform';
+import { desktopVersion, isDesktop, isOfflineDesktop } from './platform';
 export { isDesktop } from './platform';
 
 declare global {
@@ -50,7 +50,7 @@ export function startDesktop() {
   if (!isDesktop || started) return;
   started = true;
   window.__BLUVIBOARD_PREPARE_CLOSE__ = requestDesktopClose;
-  void checkDesktopUpdates();
+  if (!isOfflineDesktop) void checkDesktopUpdates();
 }
 
 export function newerDesktopVersion(candidate: string, installed = desktopVersion) {

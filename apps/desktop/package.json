@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "assets": "node scripts/prepare.cjs",
+    "build:offline": "npm run build --workspace @whiteboard/web -- --mode desktop",
     "dev": "tauri dev",
     "bundle": "tauri build --ci --bundles nsis",
     "check": "cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo test --manifest-path src-tauri/Cargo.toml --locked"

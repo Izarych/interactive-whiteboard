@@ -1,0 +1,7 @@
+{
+  "identifier": "offline-cloud",
+  "description": "Only bundled local UI can use the authenticated, allowlisted cloud bridge.",
+  "windows": ["main"],
+  "local": true,
+  "permissions": ["allow-desktop-cloud-request", "allow-desktop-cloud-upload"]
+}

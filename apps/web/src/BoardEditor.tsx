@@ -24,6 +24,8 @@ import { ToolPanelPinControl } from './ToolPanelPinControl';
 import type { ToolPanelPinState } from './ToolPanelPinControl';
 import { Download, Eraser, Grid2X2, Hand, Highlighter, ImagePlus, Keyboard, MoreHorizontal, MousePointer2, Palette, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Shapes, Redo2, Trash2, Undo2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { isOfflineDesktop } from './platform';
+import { exportLocalProject } from './offline-project';
 
 export interface EditorHandle {
   flush: (forUpdate?: boolean) => Promise<void>;
@@ -113,7 +115,7 @@ function Editor({ initial, onCopy, editorRef, disabled, sidebarCollapsed, onTogg
   const setModifier = (value: ShapeModifier) => { setShapeModifier(value); saveShapeModifier(value); };
   const chooseFigure = (value: FigureKind) => { canvasRef.current?.finish(); setFigure(value); };
   const background = board.document.background ?? DEFAULT_BACKGROUND;
-  const saveText = uploading ? 'Загрузка изображения…' : status === 'saved' ? 'Сохранено' : status === 'local' ? 'Сохранено на устройстве' : status === 'saving' ? 'Сохранение…' : status === 'pending' ? 'Есть изменения' : 'Не сохранено';
+  const saveText = uploading ? isOfflineDesktop ? 'Сохранение изображения…' : 'Загрузка изображения…' : status === 'saved' ? isOfflineDesktop ? 'Сохранено на компьютере' : 'Сохранено' : status === 'local' ? isOfflineDesktop ? 'Сохранён резервный черновик' : 'Сохранено на устройстве' : status === 'saving' ? 'Сохранение…' : status === 'pending' ? 'Есть изменения' : 'Не сохранено';
   const togglePanel = (next: NonNullable<typeof panel>) => setPanel((previous) => previous === next ? null : next);
   useEffect(() => {
     if (!activePanel) return;
@@ -310,8 +312,8 @@ function Editor({ initial, onCopy, editorRef, disabled, sidebarCollapsed, onTogg
           <div className="board-name-block"><input className="board-title" aria-label="Название доски" readOnly={participant} maxLength={120} value={initial.collaborative ? titleInput : board.title}
             onFocus={() => { titleFocused.current = true; }} onBlur={() => { titleFocused.current = false; commitTitle(); }}
             onChange={(event) => { if (initial.collaborative) setTitleInput(event.target.value); else edit({ title: event.target.value }); }} />
-            <span className={`save-status save-status--${status}`} role="status" title={status === 'local' ? 'Сервер временно недоступен. Можно продолжать рисовать: изменения сохраняются на устройстве и отправятся автоматически после восстановления связи. Не очищайте данные приложения.' : undefined}><span className="status-dot" />{saveText}</span></div>
-          {!participant && <SharingControls id={board.id} initiallyOpen={sharingInitiallyOpen} flush={async () => { canvasRef.current?.finish(); commitTitle(); while (pendingUploads.current) await uploads.current; await flush(); }} onEnabled={() => { if (!initial.collaborative) onCollaborative?.(); }} />}
+             <span className={`save-status save-status--${status}`} role="status" title={status === 'local' ? isOfflineDesktop ? 'Запись в основное хранилище не завершена. Сохранён резервный черновик. Повторите сохранение или сохраните файл доски на другой диск.' : 'Сервер временно недоступен. Можно продолжать рисовать: изменения сохраняются на устройстве и отправятся автоматически после восстановления связи. Не очищайте данные приложения.' : undefined}><span className="status-dot" />{saveText}</span></div>
+          {!participant && !isOfflineDesktop && <SharingControls id={board.id} initiallyOpen={sharingInitiallyOpen} flush={async () => { canvasRef.current?.finish(); commitTitle(); while (pendingUploads.current) await uploads.current; await flush(); }} onEnabled={() => { if (!initial.collaborative) onCollaborative?.(); }} />}
           <span className="editor-divider" />
           <button className="editor-icon-button" aria-label="Отменить" title="Отменить (Ctrl+Z)" disabled={!history.undo.length} onClick={undo}><Undo2 size={18} /></button>
           <button className="editor-icon-button" aria-label="Повторить" title="Повторить (Ctrl+Shift+Z)" disabled={!history.redo.length} onClick={redo}><Redo2 size={18} /></button>
@@ -320,6 +322,7 @@ function Editor({ initial, onCopy, editorRef, disabled, sidebarCollapsed, onTogg
             {panel === 'board' && <section id="board-actions" className="editor-popover board-actions" role="dialog" aria-label="Действия доски">
               {!participant && <button onClick={() => { setPanel(null); onNewBoard(); }}><Plus size={17} />Новая доска</button>}
               <button disabled={exporting || uploading > 0} onClick={() => { setPanel(null); void exportPng(); }}><Download size={17} />Скачать PNG</button>
+              {isOfflineDesktop && <button disabled={exporting || uploading > 0} onClick={() => { setPanel(null); canvasRef.current?.finish(); void exportLocalProject(snapshot()).catch(reason => setImageError(errorMessage(reason))); }}><Download size={17} />Сохранить файл доски</button>}
               <button disabled={!board.document.elements.length} onClick={() => { if (window.confirm('Очистить холст? Это действие можно отменить.')) { changeElements([]); setPanel(null); } }}><Trash2 size={17} />Очистить</button>
               {tool === 'select' && board.document.elements.some((element) => element.id === selectedImageId && element.kind === 'image') && <button onClick={() => { deleteSelected(); setPanel(null); }}><Eraser size={17} />Удалить изображение</button>}
             </section>}
@@ -368,7 +371,7 @@ function Editor({ initial, onCopy, editorRef, disabled, sidebarCollapsed, onTogg
       <div className="editor-alerts">
         {panelPin.error && <div className="error-banner" role="alert"><span>{panelPin.error}</span><button disabled={panelPin.saving} onClick={panelPin.reload}>Повторить загрузку настройки</button></div>}
         {(error || draftWarning) && <div className="error-banner" role="alert">
-          <span>{draftWarning || error} Рисунок остаётся в этой вкладке{draftWarning ? '.' : ' и в локальной резервной копии.'}</span>
+          <span>{draftWarning || error} Рисунок остаётся {isOfflineDesktop ? 'в этом окне' : 'в этой вкладке'}{draftWarning ? '.' : ' и в локальной резервной копии.'}</span>
           {error && <><button onClick={() => { void flush().catch(() => {}); }}>Повторить сохранение</button>
             {!participant && <button onClick={onCopy}>Сохранить как новую доску</button>}</>}
         </div>}

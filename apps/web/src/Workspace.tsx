@@ -1,10 +1,13 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { ActiveSession, Board, BoardSummary, SessionInfo, ToolShortcuts } from '@whiteboard/shared';
 import { api, errorMessage } from './api';
 import type { EditorHandle } from './BoardEditor';
 import { Check, FileText, ImagePlus, PanelLeftClose, PanelLeftOpen, PencilLine, Plus, X } from 'lucide-react';
 import { InstallControls } from './InstallControls';
 import { registerUpdateGuard } from './pwa';
+import { isOfflineDesktop } from './platform';
+import { localEvents } from './offline-store';
 
 const BoardEditor = lazy(() => import('./BoardEditor').then((module) => ({ default: module.BoardEditor })));
 const sidebarPreference = 'bluviboard:sidebar-collapsed';
@@ -16,12 +19,13 @@ function sidebarDefault() {
   return window.matchMedia('(max-width: 760px)').matches;
 }
 
-function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: {
+function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin, localControls, preferredBoard }: {
   session: ActiveSession; blocked: boolean; onAuth: (mode: 'login' | 'register') => void;
   onProfile: () => void; onSession: (session: SessionInfo) => void;
   onAdmin: () => void;
+  localControls?: ReactNode; preferredBoard?: string;
 }) {
-  const [boards, setBoards] = useState<BoardSummary[]>([]);
+  const [boards, setBoards] = useState<(BoardSummary & { localSyncLabel?: string })[]>([]);
   const [active, setActive] = useState<Board | null>(null);
   const [sharingBoard, setSharingBoard] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
@@ -101,7 +105,7 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
     const load = async () => {
       try {
         const list = await api.list();
-        const first = list.length ? await api.get(list[0].id) : null;
+        const first = list.length ? await api.get(list.find(board => board.id === preferredBoard)?.id ?? list[0].id) : null;
         if (!cancelled) { setBoards(list); setActive(first); }
       } catch (reason) {
         if (!cancelled) setError(errorMessage(reason));
@@ -111,6 +115,13 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
     };
     void load();
     return () => { cancelled = true; };
+  }, []);
+  useEffect(() => {
+    if (!isOfflineDesktop) return;
+    let cancelled = false;
+    const reload = () => { void api.list().then(list => { if (!cancelled) setBoards(list); }).catch(reason => { if (!cancelled) setError(errorMessage(reason)); }); };
+    localEvents.addEventListener('change', reload);
+    return () => { cancelled = true; localEvents.removeEventListener('change', reload); };
   }, []);
 
   useEffect(() => registerUpdateGuard(async () => {
@@ -152,7 +163,7 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
   };
 
   const remove = (board: BoardSummary) => {
-    if (!window.confirm(`Удалить доску «${board.title}»? Восстановить её после удаления нельзя.`)) return;
+    if (!window.confirm(isOfflineDesktop ? `Удалить доску «${board.title}» с этого компьютера? Если она синхронизирована, удаление будет отправлено в аккаунт. Изменённая на сайте версия не будет удалена автоматически.` : `Удалить доску «${board.title}»? Восстановить её после удаления нельзя.`)) return;
     return run(async () => {
       // Wait out an active save before deleting, but allow discarding an unsaved/offline draft.
       if (board.id === active?.id) await editorRef.current?.flush().catch(() => {});
@@ -214,13 +225,13 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
           {boards.map((board, index) => <div className={`board-item ${active?.id === board.id ? 'active' : ''}`} key={board.id}>
             <button className="board-open" disabled={busy} onClick={() => { void open(board.id); }} aria-current={active?.id === board.id ? 'page' : undefined}>
               <span className={`board-thumbnail board-thumbnail--${index % 3}`}><FileText size={17} strokeWidth={1.5} /></span><span className="board-details"><strong>{board.title}</strong>
-                <small>{new Date(board.updatedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</small></span>
+                <small>{new Date(board.updatedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</small>{board.localSyncLabel && <small className="offline-sync-label">{board.localSyncLabel}</small>}</span>
             </button>
             <button className="delete-button" disabled={busy} title="Удалить доску" aria-label={`Удалить доску ${board.title}`} onClick={() => { void remove(board); }}>×</button>
           </div>)}
           {!boards.length && !busy && <p className="empty-list">Ваши доски появятся здесь</p>}
         </nav>
-        <div className="sidebar-account">
+        {localControls ?? <div className="sidebar-account">
           <button className="account-button" disabled={busy} aria-label={session.kind === 'user' ? 'Открыть профиль' : 'Войти или зарегистрироваться'}
             onClick={() => { void openAccount(session.kind === 'guest' ? 'register' : undefined); }}>
             <span className="account-avatar">{session.user?.avatarUrl ? <img src={session.user.avatarUrl} alt="" /> : (Array.from(session.user?.name ?? '')[0]?.toUpperCase() ?? 'Г')}</span>
@@ -231,7 +242,7 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin }: 
             <button disabled={busy} onClick={() => { void openAccount('register'); }}>Создать аккаунт</button>
           </> : <button disabled={busy} onClick={() => { void logout(); }}>Выйти</button>}</div>
           {session.user?.role === 'admin' && <button className="admin-entry-button" disabled={busy} onClick={() => { void run(async () => { await editorRef.current?.flush(); onAdmin(); }); }}>Админ-панель →</button>}
-        </div>
+        </div>}
         <InstallControls />
         <div className="sidebar-footer"><span className="studio-footer-dot" />Пространство для ваших идей<br /><span>В своём ритме. Без лишнего.</span></div>
       </aside>

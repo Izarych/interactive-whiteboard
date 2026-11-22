@@ -1,4 +1,6 @@
 import type { ActiveSession, Board, BoardSummary, DesktopRelease, EmailChallenge, ImageAsset, RegisterAccount, SessionInfo, ToolShortcuts, UpdateBoard, UserProfile } from '@whiteboard/shared';
+import { isOfflineDesktop } from './platform';
+import { localRequest, storeLocalImage } from './offline-store';
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
@@ -9,6 +11,15 @@ export function temporaryConnectionError(reason: unknown) {
 }
 
 export async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  if (isOfflineDesktop) {
+    try {
+      if (path === '/desktop/latest') return await (await import('./offline-cloud')).cloudRequest<T>(path);
+      return await localRequest<T>(path, options);
+    } catch (reason) {
+      if (reason instanceof Error && 'status' in reason) throw new ApiError(reason.message, Number(reason.status));
+      throw reason;
+    }
+  }
   let response: Response;
   try {
     response = await fetch(`/api${path}`, {
@@ -41,6 +52,7 @@ export const api = {
   save: (id: string, body: UpdateBoard) => request<Board>(`/boards/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   delete: (id: string) => request<void>(`/boards/${id}`, { method: 'DELETE' }),
   uploadImage: (file: File) => {
+    if (isOfflineDesktop) return storeLocalImage(file);
     const form = new FormData();
     form.append('file', file);
     return request<ImageAsset>('/assets', { method: 'POST', body: form });

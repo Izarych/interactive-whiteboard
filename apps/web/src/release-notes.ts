@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { desktopVersion, isDesktop } from './platform';
+import { desktopVersion, isDesktop, isOfflineDesktop } from './platform';
 
 export interface ReleaseNotes { kind: 'web' | 'desktop'; version: string; title: string; notes: string }
 const releases = __BLUVIBOARD_RELEASES__;
@@ -40,6 +40,10 @@ export function releaseHistory(): ReleaseNotes[] {
 }
 function startup() {
   const entries: ReleaseNotes[] = [];
+  if (isOfflineDesktop) {
+    remember(webKey, appVersion);
+    return { open: false, entries, automatic: true, awaitingSession: false };
+  }
   const previous = read(webKey);
   // A legacy update-click marker must not reopen an already acknowledged release.
   try { sessionStorage.removeItem(pendingKey); } catch { /* Storage may be unavailable. */ }

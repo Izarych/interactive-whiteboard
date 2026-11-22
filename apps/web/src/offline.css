@@ -1,0 +1,9 @@
+.offline-cloud-panel { border-top: 1px solid #dbe6f2; margin-top: 14px; padding: 15px 8px; font-size: 12px; line-height: 1.7; color: #52667e; }
+.offline-cloud-panel > strong { color: #203d60; }
+.offline-cloud-panel > span { display: block; overflow-wrap: anywhere; }
+.offline-cloud-panel p { margin: 9px 0; }
+.offline-cloud-panel button { display: block; width: 100%; text-align: left; border: 1px solid #cfdef0; border-radius: 8px; padding: 8px 10px; margin: 8px 0; color: #245b9b; background: #f5f9ff; font-size: 12px; }
+.offline-error { color: #a33d2d; overflow-wrap: anywhere; }
+.offline-adopt { display: flex; align-items: flex-start; gap: 8px; margin: 16px 0; font-size: 12px; line-height: 1.7; }
+.offline-adopt input { margin-top: 4px; }
+.offline-sync-label { color: #9a6524 !important; }

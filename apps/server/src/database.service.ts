@@ -63,6 +63,12 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         operation_id uuid NOT NULL,
         PRIMARY KEY(board_id, operation_id)
       );
+      CREATE TABLE IF NOT EXISTS desktop_sync_operations (
+        owner_id uuid NOT NULL REFERENCES workspace_owners(id) ON DELETE CASCADE,
+        operation_id uuid NOT NULL,
+        board_id uuid NOT NULL,
+        PRIMARY KEY(owner_id, operation_id)
+      );
       ALTER TABLE image_assets ADD COLUMN IF NOT EXISTS owner_id uuid REFERENCES workspace_owners(id) ON DELETE CASCADE;
       ALTER TABLE image_assets ADD COLUMN IF NOT EXISTS shared_board_id uuid REFERENCES boards(id) ON DELETE SET NULL;
       CREATE TABLE IF NOT EXISTS board_assets (

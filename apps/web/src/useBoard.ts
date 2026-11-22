@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Board, BoardDocument } from '@whiteboard/shared';
 import { ApiError, api, errorMessage, temporaryConnectionError } from './api';
 import { acknowledgesSave } from './board-sync';
+import { isOfflineDesktop } from './platform';
+import { selectLocalBoard } from './offline-store';
 
 const draftKey = (id: string) => `whiteboard:draft:${id}`;
 
@@ -41,7 +43,7 @@ export function useBoard(initial: Board, onSaved: (board: Board) => void) {
       setDraftWarning('');
       return true;
     } catch {
-      setDraftWarning('Локальная резервная копия недоступна. Дождитесь сохранения на сервер перед закрытием.');
+      setDraftWarning(isOfflineDesktop ? 'Резервный черновик недоступен. Дождитесь записи на диск перед закрытием.' : 'Локальная резервная копия недоступна. Дождитесь сохранения на сервер перед закрытием.');
       return false;
     }
   }, [initial.id]);
@@ -72,7 +74,7 @@ export function useBoard(initial: Board, onSaved: (board: Board) => void) {
           const snapshot = state.current;
           let saved: Board;
           try {
-            if (!navigator.onLine) throw new ApiError('Нет подключения к серверу', 0);
+            if (!isOfflineDesktop && !navigator.onLine) throw new ApiError('Нет подключения к серверу', 0);
             saved = await api.save(snapshot.id, {
               title: snapshot.title.trim() || 'Без названия', document: snapshot.document, revision: snapshot.revision,
             });
@@ -108,6 +110,7 @@ export function useBoard(initial: Board, onSaved: (board: Board) => void) {
         setDraftWarning('');
       } catch (reason) {
         if (temporaryConnectionError(reason)) {
+          if (isOfflineDesktop) setError(errorMessage(reason));
           const stored = storeDraft();
           setStatus(stored ? 'local' : 'error');
           // Back off even when the user keeps drawing. A server outage does not
@@ -134,6 +137,7 @@ export function useBoard(initial: Board, onSaved: (board: Board) => void) {
 
   useEffect(() => {
     mounted.current = true;
+    if (isOfflineDesktop) selectLocalBoard(initial.id);
     const unload = (event: BeforeUnloadEvent) => {
       if (session.current.changes !== session.current.saved) {
         event.preventDefault();
@@ -145,6 +149,7 @@ export function useBoard(initial: Board, onSaved: (board: Board) => void) {
     window.addEventListener('online', online);
     return () => {
       mounted.current = false;
+      if (isOfflineDesktop) selectLocalBoard(null);
       window.clearTimeout(retry.current.timer);
       window.removeEventListener('beforeunload', unload);
       window.removeEventListener('online', online);

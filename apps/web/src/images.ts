@@ -16,7 +16,14 @@ export function loadImage(assetId: string): Promise<HTMLImageElement> {
     };
     // Both local and cloud images are served through the same-origin API.
     const access = sharedAccess;
-    if (access) {
+    if (isOfflineDesktop) {
+      void localImage(assetId).then(blob => {
+        const url = URL.createObjectURL(blob);
+        image.onload = () => { URL.revokeObjectURL(url); resolve(image); };
+        image.onerror = () => { URL.revokeObjectURL(url); cache.delete(assetId); reject(new Error('Не удалось прочитать локальное изображение')); };
+        image.src = url;
+      }).catch(reason => { cache.delete(assetId); reject(reason); });
+    } else if (access) {
       void fetch(`/api/collaboration/${access.boardId}/assets/${assetId}`, { headers: { 'X-Board-Token': access.token }, cache: 'no-store' }).then(async response => {
         if (!response.ok) throw new Error('Изображение недоступно');
         const url = URL.createObjectURL(await response.blob());
@@ -30,3 +37,5 @@ export function loadImage(assetId: string): Promise<HTMLImageElement> {
   if (cache.size > 32) cache.delete(cache.keys().next().value!);
   return promise;
 }
+import { isOfflineDesktop } from './platform';
+import { localImage } from './offline-store';

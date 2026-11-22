@@ -47,6 +47,7 @@ jobs:
         shell: bash
         run: echo "version=$(node -p "require('./apps/desktop/package.json').version")" >> "$GITHUB_OUTPUT"
       - run: npm run assets --workspace @whiteboard/desktop
+      - run: npm run build:offline --workspace @whiteboard/desktop
       - run: npm run desktop:check
       - run: npm run desktop:build
       - run: npm run build:web

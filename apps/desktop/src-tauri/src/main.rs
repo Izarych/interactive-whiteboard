@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod cloud;
 mod navigation;
 
 use tauri::{
@@ -21,13 +22,21 @@ fn main() {
                 let _ = window.set_focus();
             }
         }))
-        .invoke_handler(tauri::generate_handler![desktop_close])
+        .invoke_handler(tauri::generate_handler![desktop_close, cloud::desktop_cloud_request, cloud::desktop_cloud_upload])
         .setup(|app| {
+            app.manage(cloud::Cloud::new()?);
+            let diagnostic_downloads = std::env::var("BLUVIBOARD_DESKTOP_DEBUG_PORT")
+                .ok().and_then(|value| value.parse::<u16>().ok()).filter(|port| *port != 0)
+                .and_then(|_| std::env::var_os("BLUVIBOARD_DESKTOP_TEST_DATA_DIR"))
+                .map(std::path::PathBuf::from).filter(|path| path.is_absolute())
+                .map(|path| path.join("downloads"));
+            if let Some(path) = &diagnostic_downloads { std::fs::create_dir_all(path)?; }
             let mut window = WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
                 .initialization_script(
-                    format!("if (window === window.top && location.origin === 'https://bluviboard.ru') {{\
+                    format!("if (window === window.top && ['https://bluviboard.ru', 'https://tauri.localhost', 'tauri://localhost'].includes(location.origin)) {{\
                       Object.defineProperty(window, '__BLUVIBOARD_DESKTOP__', {{ value: true }});\
                       Object.defineProperty(window, '__BLUVIBOARD_DESKTOP_VERSION__', {{ value: '{}' }});\
+                      if (location.origin !== 'https://bluviboard.ru') Object.defineProperty(window, '__BLUVIBOARD_OFFLINE__', {{ value: true }});\
                     }}", env!("CARGO_PKG_VERSION")),
                 )
                 .on_navigation(|url| {
@@ -41,13 +50,15 @@ fn main() {
                     navigation::open_external(&url);
                     NewWindowResponse::Deny
                 })
-                .on_download(|_, event| {
+                .on_download(move |_, event| {
                     if let DownloadEvent::Requested { destination, .. } = event {
                         let name = destination
                             .file_name()
                             .map(|name| name.to_string_lossy().into_owned())
                             .unwrap_or_else(|| "BluviBoard.png".into());
-                        if let Some(path) = rfd::FileDialog::new().set_file_name(name).save_file() {
+                        if let Some(path) = &diagnostic_downloads {
+                            *destination = path.join(name);
+                        } else if let Some(path) = rfd::FileDialog::new().set_file_name(name).save_file() {
                             *destination = path;
                         } else {
                             return false;
@@ -79,7 +90,7 @@ fn main() {
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 if let Some(webview) = window.get_webview_window("main") {
-                    if webview.url().is_ok_and(|url| navigation::is_board(&url)) {
+                    if webview.url().is_ok_and(|url| navigation::is_board(&url) || navigation::is_launcher(&url)) {
                         api.prevent_close();
                         let _ = webview.eval(
                             "if (window.__BLUVIBOARD_PREPARE_CLOSE__) {\
