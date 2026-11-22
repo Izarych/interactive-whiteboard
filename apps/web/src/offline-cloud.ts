@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type { Board, BoardSummary, ImageAsset, SessionInfo } from '@whiteboard/shared';
 import { invoke } from '@tauri-apps/api/core';
+import { blobBase64 } from './base64';
 import {
   activeLocalBoard, changeRecords, equalContent, localAssets, localBoard, localChanged, localEvents, localProfile,
   localSession, putLocalAsset, recordKey, records,
@@ -32,12 +33,8 @@ let started = false;
 let epoch = 0;
 
 export async function imageBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(',')[1]);
-    reader.onerror = () => reject(new Error('Не удалось прочитать изображение'));
-    reader.readAsDataURL(blob);
-  });
+  try { return await blobBase64(blob); }
+  catch { throw new Error('Не удалось прочитать изображение'); }
 }
 export function imageBlob(data: string, mime: string) {
   if (!['image/png', 'image/jpeg', 'image/webp'].includes(mime) || data.length > 15_000_000) throw new Error('Неверное облачное изображение');

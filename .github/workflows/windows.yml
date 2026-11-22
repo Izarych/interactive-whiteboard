@@ -186,6 +186,7 @@ jobs:
           fi
           export BLUVIBOARD_DESKTOP_EXECUTABLE="$app/Contents/MacOS/bluviboard-desktop"
           node apps/desktop/scripts/macos-smoke.cjs
+          node apps/desktop/scripts/macos-smoke.cjs
           rm -rf -- "$app"
           test ! -e "$app"
       - uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684

@@ -54,12 +54,24 @@ async function offline(context: BrowserContext, bridge = false, mac = false) {
 
 test('Mac offline exports use the native save bridge and contain the document and embedded image', async ({ page, context }) => {
   await offline(context, false, true);
+  await context.addInitScript(() => {
+    FileReader.prototype.readAsDataURL = function() { throw new DOMException('WKWebView FileReader regression', 'NotReadableError'); };
+  });
   await context.route('**/api/**', route => route.abort());
   await page.goto('/'); await create(page);
   await draw(page);
   const image = await sharp({ create: { width: 80, height: 60, channels: 3, background: '#2563eb' } }).png().toBuffer();
   await page.getByLabel('Загрузить изображения').setInputFiles({ name: 'offline.png', mimeType: 'image/png', buffer: image });
   await expect(page.getByText('2 объектов', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => new Promise<boolean>((resolve, reject) => {
+    const request = indexedDB.open('bluviboard-desktop', 1);
+    request.onsuccess = () => {
+      const images = request.result.transaction('assets').objectStore('assets').getAll();
+      images.onsuccess = () => resolve(images.result.every(asset => asset.blob instanceof Blob && !(asset.blob instanceof File)));
+      images.onerror = () => reject(images.error);
+    };
+    request.onerror = () => reject(request.error);
+  }))).toBe(true);
   await page.getByRole('button', { name: 'Действия доски', exact: true }).click();
   await page.getByRole('button', { name: 'Сохранить файл доски', exact: true }).click();
   await expect.poll(() => page.evaluate(() => (window as Window & { nativeFiles: unknown[] }).nativeFiles.length)).toBe(1);

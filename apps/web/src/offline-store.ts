@@ -201,12 +201,15 @@ export async function localImage(id: string): Promise<Blob> {
 }
 export async function storeLocalImage(file: File): Promise<ImageAsset> {
   if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024) throw new OfflineError('Выберите PNG, JPEG или WebP размером до 10 МБ.', 400);
-  const bitmap = await createImageBitmap(file);
+  // Detach the stored image from the input/File lifetime. In WKWebView a
+  // File-backed IndexedDB value can become unreadable after the input clears.
+  const blob = new Blob([await file.arrayBuffer()], { type: file.type });
+  const bitmap = await createImageBitmap(blob);
   const { width, height } = bitmap;
   bitmap.close();
   if (!width || !height || width * height > 40_000_000) throw new OfflineError('Слишком большое изображение', 400);
   const id = crypto.randomUUID(), profile = localProfile();
-  await putLocalAsset({ key: recordKey(profile, id), profile, id, blob: file, width, height });
+  await putLocalAsset({ key: recordKey(profile, id), profile, id, blob, width, height });
   return { id, width, height, url: `local:${id}` };
 }
 export async function adoptDeviceBoards() {
