@@ -149,10 +149,12 @@ jobs:
         shell: bash
         run: |
           if [[ "$BLUVIBOARD_DESKTOP_PREVIEW" == true ]]; then
-            npm exec --workspace @whiteboard/desktop -- tauri build --ci --bundles dmg --target ${{ matrix.target }} --config src-tauri/tauri.preview.conf.json
+            npm exec --workspace @whiteboard/desktop -- tauri build --ci --bundles app --verbose --target ${{ matrix.target }} --config src-tauri/tauri.preview.conf.json
           else
-            npm exec --workspace @whiteboard/desktop -- tauri build --ci --bundles dmg --target ${{ matrix.target }}
+            npm exec --workspace @whiteboard/desktop -- tauri build --ci --bundles app --verbose --target ${{ matrix.target }}
           fi
+      - name: Create the drag-to-Applications disk image
+        run: node apps/desktop/scripts/create-macos-dmg.cjs
       - run: node apps/desktop/scripts/package-macos.cjs
       - name: Install the DMG and check the real WKWebView
         shell: bash
@@ -170,9 +172,9 @@ jobs:
           codesign --verify --deep --strict "$app"
           file "$app/Contents/MacOS/bluviboard-desktop"
           if [[ "$BLUVIBOARD_MACOS_ARCH" == arm64 ]]; then
-            lipo -verify_arch arm64 "$app/Contents/MacOS/bluviboard-desktop"
+            lipo "$app/Contents/MacOS/bluviboard-desktop" -verify_arch arm64
           else
-            lipo -verify_arch x86_64 "$app/Contents/MacOS/bluviboard-desktop"
+            lipo "$app/Contents/MacOS/bluviboard-desktop" -verify_arch x86_64
           fi
           export BLUVIBOARD_DESKTOP_EXECUTABLE="$app/Contents/MacOS/bluviboard-desktop"
           node apps/desktop/scripts/macos-smoke.cjs
