@@ -36,7 +36,7 @@
     assert(window.__BLUVIBOARD_DESKTOP_OS__ === 'macos', 'Not a macOS build');
     assert(window.__BLUVIBOARD_DESKTOP_VERSION__ === window.__BLUVIBOARD_SMOKE_VERSION__, 'Wrong installed version');
     assert(window.__BLUVIBOARD_PREVIEW__ === window.__BLUVIBOARD_SMOKE_PREVIEW__, 'Wrong installed application identity');
-    assert(location.href.startsWith('tauri://localhost/'), `Unexpected origin: ${location.href}`);
+    assert(location.protocol === 'tauri:' && location.hostname === 'localhost', `Unexpected origin: ${location.href}`);
     // Synthetic input is used instead of a WebDriver, which WKWebView does not
     // provide. Only pointer capture is shimmed; the real canvas/editor handles it.
     Element.prototype.setPointerCapture = () => {};
