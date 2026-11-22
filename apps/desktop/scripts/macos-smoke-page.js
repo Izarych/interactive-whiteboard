@@ -7,7 +7,7 @@
     while (Date.now() < end) { const value = condition(); if (value) return value; await sleep(50); }
     throw new Error(`Timed out: ${message}`);
   };
-  const button = label => [...document.querySelectorAll('button')].find(node => node.getAttribute('aria-label') === label || node.textContent.trim() === label);
+  const button = label => [...document.querySelectorAll('button')].find(node => !node.disabled && (node.getAttribute('aria-label') === label || node.textContent.trim() === label));
   const text = value => document.body.innerText.includes(value);
   const fill = (node, value) => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(node, value);
@@ -73,15 +73,19 @@
       files(document.querySelector('input[aria-label="Загрузить изображения"]'), new File([blob], 'offline.png', { type: 'image/png' }));
       await wait(() => text('2 объектов'), 'drawing and image');
       await saved();
-      button('Действия доски').click(); button('Сохранить файл доски').click();
+      button('Действия доски').click();
+      (await wait(() => button('Сохранить файл доски'), 'project export menu')).click();
       await wait(() => exports.some(name => name.endsWith('.bluviboard')), 'native project export');
-      button('Действия доски').click(); button('Скачать PNG').click();
+      button('Действия доски').click();
+      (await wait(() => button('Скачать PNG'), 'PNG export menu')).click();
       await wait(() => exports.some(name => name.endsWith('.png')), 'native PNG export');
       button('Ластик').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 }));
       const hotkey = await wait(() => document.querySelector('input[aria-label="Хоткей: Ластик"]'), 'hotkey settings');
-      hotkey.focus(); key(hotkey); button('Сохранить хоткей').click();
+      hotkey.focus(); key(hotkey);
+      (await wait(() => { const node = button('Сохранить хоткей'); return node && !node.disabled && node; }, 'recorded hotkey')).click();
       await wait(() => text('Хоткей сохранён'), 'persisted hotkey');
       button('Карандаш').click();
+      await wait(() => button('Карандаш')?.getAttribute('aria-pressed') === 'true', 'pencil before closing stroke');
       await draw(false);
       await report({ status: 'passed', exports, activeStrokeOnClose: true });
       await close();
@@ -92,6 +96,7 @@
       key(document.body);
       await wait(() => button('Ластик')?.getAttribute('aria-pressed') === 'true', 'hotkey after restart');
       key(document.body); button('Карандаш').click();
+      await wait(() => button('Карандаш')?.getAttribute('aria-pressed') === 'true', 'pencil after hotkey');
       if (phase === 'restart') {
         const original = IDBDatabase.prototype.transaction;
         IDBDatabase.prototype.transaction = function(names, mode, ...options) {
