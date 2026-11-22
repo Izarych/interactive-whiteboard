@@ -1,0 +1,7 @@
+{
+  "productName": "BluviBoard Offline Preview",
+  "identifier": "ru.bluviboard.desktop.preview",
+  "bundle": {
+    "shortDescription": "Тестовая автономная доска с отдельным локальным хранилищем"
+  }
+}

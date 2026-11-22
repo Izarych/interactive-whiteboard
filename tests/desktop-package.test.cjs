@@ -31,5 +31,25 @@ test('desktop packaging selects the current x64 installer from a cache containin
     assert.equal(fs.readFileSync(path.join(root, 'artifacts', `${name}.sha256`), 'utf8'), `${createHash('sha256').update(current).digest('hex')}  ${name}\n`);
     fs.unlinkSync(currentFile);
     assert.notEqual(execute().status, 0, 'A missing current installer must not fall back to an older version');
+    fs.writeFileSync(path.join(root, 'src-tauri/tauri.preview.conf.json'), JSON.stringify({ productName: 'BluviBoard Offline Preview' }));
+    const preview = Buffer.from('MZ-isolated-offline-preview');
+    fs.writeFileSync(path.join(bundles, `BluviBoard Offline Preview_${version}_x64-setup.exe`), preview);
+    const packaged = spawnSync(process.execPath, [path.join(scripts, 'package.cjs')], { encoding: 'utf8', env: { ...process.env, BLUVIBOARD_DESKTOP_PREVIEW: 'true' } });
+    assert.equal(packaged.status, 0, packaged.stderr);
+    const previewName = `BluviBoard-Offline-Preview-Setup-${version}-x64.exe`;
+    assert.deepEqual(fs.readFileSync(path.join(root, 'artifacts', previewName)), preview);
+    assert.deepEqual(fs.readFileSync(path.join(root, 'artifacts', name)), current, 'Preview packaging must not replace the regular installer');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('offline preview has separate application data and credential identities', () => {
+  const normal = require('../apps/desktop/src-tauri/tauri.conf.json');
+  const preview = require('../apps/desktop/src-tauri/tauri.preview.conf.json');
+  assert.notEqual(preview.identifier, normal.identifier);
+  assert.notEqual(preview.productName, normal.productName);
+  assert.equal(normal.bundle.windows.webviewInstallMode.type, 'offlineInstaller');
+  assert.equal(normal.build.frontendDist, '../ui');
+  const cloud = require('../apps/desktop/src-tauri/capabilities/offline-cloud.json');
+  assert.equal(cloud.local, true);
+  assert.equal(cloud.remote, undefined);
 });

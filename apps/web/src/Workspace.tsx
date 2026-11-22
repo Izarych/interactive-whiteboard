@@ -96,7 +96,7 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin, lo
   }, []);
 
   const onSaved = useCallback((board: Board) => {
-    setBoards((previous) => previous.map((item) => item.id === board.id ? board : item)
+    setBoards((previous) => previous.map((item) => item.id === board.id ? { ...item, ...board } : item)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
   }, []);
 
@@ -145,7 +145,7 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin, lo
   const create = () => run(async () => {
     await editorRef.current?.flush();
     const board = await api.create('Новая доска');
-    setBoards((previous) => [board, ...previous]);
+    setBoards((previous) => [board, ...previous.filter(item => item.id !== board.id)]);
     setActive(board);
     if (window.matchMedia('(max-width: 760px)').matches) setSidebarCollapsed(true);
   });
@@ -190,7 +190,7 @@ function Workspace({ session, blocked, onAuth, onProfile, onSession, onAdmin, lo
       throw reason;
     }
     try { localStorage.removeItem(`whiteboard:draft:${source.id}`); } catch { /* Copy is saved. */ }
-    setBoards((previous) => [saved, ...previous]);
+    setBoards((previous) => [saved, ...previous.filter(item => item.id !== saved.id)]);
     setActive(saved);
   });
 

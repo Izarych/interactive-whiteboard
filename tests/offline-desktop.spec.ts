@@ -88,8 +88,10 @@ test('first standalone start, drawings, images, project files and reload work wi
   await expect(page.getByRole('button', { name: '+ Новая доска', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Продолжить как гость', exact: true })).toHaveCount(0);
   await create(page);
+  await expect(page.getByRole('navigation', { name: 'Доски', exact: true }).getByRole('button', { name: /^Новая доска/ })).toHaveCount(1);
   await page.getByRole('textbox', { name: 'Название доски', exact: true }).fill('Полностью оффлайн');
   await draw(page);
+  await expect(page.getByRole('navigation', { name: 'Доски', exact: true }).getByRole('button', { name: /^Полностью оффлайн/ })).toHaveCount(1);
   const png = await sharp({ create: { width: 64, height: 48, channels: 3, background: '#2563eb' } }).png().toBuffer();
   await page.getByLabel('Загрузить изображения').setInputFiles({ name: 'local.png', mimeType: 'image/png', buffer: png });
   await expect(page.getByText('2 объектов', { exact: true })).toBeVisible();

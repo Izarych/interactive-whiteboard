@@ -12,6 +12,7 @@ pub struct Cloud {
     client: Client,
     token: Mutex<Option<String>>,
     persistent: bool,
+    credential_scope: String,
 }
 
 #[derive(Serialize)]
@@ -53,26 +54,26 @@ fn allowed(method: &str, path: &str) -> bool {
 }
 
 #[cfg(windows)]
-fn credential() -> Result<keyring::Entry, String> {
-    keyring::Entry::new("ru.bluviboard.desktop", "cloud-session").map_err(|error| error.to_string())
+fn credential(scope: &str) -> Result<keyring::Entry, String> {
+    keyring::Entry::new(scope, "cloud-session").map_err(|error| error.to_string())
 }
 
-fn load_token(persistent: bool) -> Option<String> {
+fn load_token(persistent: bool, scope: &str) -> Option<String> {
     #[cfg(windows)]
     if persistent {
-        return credential()
+        return credential(scope)
             .ok()
             .and_then(|entry| entry.get_password().ok())
             .filter(|value| valid_token(value));
     }
-    let _ = persistent;
+    let _ = (persistent, scope);
     None
 }
 
-fn remember_token(persistent: bool, token: Option<&str>) -> Option<String> {
+fn remember_token(persistent: bool, scope: &str, token: Option<&str>) -> Option<String> {
     #[cfg(windows)]
     if persistent {
-        let result = credential().and_then(|entry| match token {
+        let result = credential(scope).and_then(|entry| match token {
             Some(value) => entry.set_password(value).map_err(|error| error.to_string()),
             None => match entry.delete_credential() {
                 Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
@@ -83,12 +84,12 @@ fn remember_token(persistent: bool, token: Option<&str>) -> Option<String> {
             return Some("Не удалось обновить защищённое хранилище Windows. Сессия действует только до закрытия программы.".into());
         }
     }
-    let _ = (persistent, token);
+    let _ = (persistent, scope, token);
     None
 }
 
 impl Cloud {
-    pub fn new() -> Result<Self, reqwest::Error> {
+    pub fn new(credential_scope: String) -> Result<Self, reqwest::Error> {
         // Diagnostic profiles must never read or overwrite the user's credential.
         let persistent = std::env::var_os("BLUVIBOARD_DESKTOP_TEST_DATA_DIR").is_none();
         Ok(Self {
@@ -97,8 +98,9 @@ impl Cloud {
                 .connect_timeout(Duration::from_secs(10))
                 .redirect(reqwest::redirect::Policy::none())
                 .build()?,
-            token: Mutex::new(load_token(persistent)),
+            token: Mutex::new(load_token(persistent, &credential_scope)),
             persistent,
+            credential_scope,
         })
     }
 
@@ -123,7 +125,7 @@ impl Cloud {
                 .token
                 .lock()
                 .map_err(|_| "Хранилище сессии недоступно")? = None;
-            warning = remember_token(self.persistent, None);
+            warning = remember_token(self.persistent, &self.credential_scope, None);
         }
         let mut request = self
             .client
@@ -201,7 +203,7 @@ impl Cloud {
         };
         if path == "/auth/login" && status == 200 && body["kind"] == "user" {
             let new_token = new_token.ok_or("Сервер не подтвердил сессию")?;
-            warning = remember_token(self.persistent, Some(&new_token));
+            warning = remember_token(self.persistent, &self.credential_scope, Some(&new_token));
             *self
                 .token
                 .lock()

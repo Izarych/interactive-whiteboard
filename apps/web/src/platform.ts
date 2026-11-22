@@ -3,6 +3,7 @@ declare global {
     readonly __BLUVIBOARD_DESKTOP__?: boolean;
     readonly __BLUVIBOARD_DESKTOP_VERSION__?: string;
     readonly __BLUVIBOARD_OFFLINE__?: boolean;
+    readonly __BLUVIBOARD_PREVIEW__?: boolean;
   }
 }
 

@@ -66,16 +66,18 @@ export default function OfflineApp({ blocked }: { blocked: boolean }) {
     clearImageCache(); setGeneration(n => n + 1);
   };
   const controls = <section className="offline-cloud-panel" aria-label="Локальные доски и синхронизация">
+    {window.__BLUVIBOARD_PREVIEW__ && <p>Offline Preview · отдельное хранилище тестовой версии</p>}
     <strong>Доски на этом компьютере</strong>
     <p>Работают без интернета. Изображения и изменения сохраняются локально.</p>
     {session?.kind === 'user' ? <>
       <span>{session.user.name} · {session.user.email}</span>
-      <p role="status">{cloud.syncing ? 'Синхронизация с аккаунтом…' : cloud.error ? 'Оффлайн · локальные изменения сохранены' : cloud.pending ? `Ожидают синхронизации: ${cloud.pending}` : cloud.lastSync ? 'Копии синхронизированы с аккаунтом' : 'Ожидание синхронизации'}</p>
+      <p role="status">{cloud.syncing ? 'Синхронизация с аккаунтом…' : cloud.error ? 'Облако недоступно · работа продолжается локально' : cloud.incoming ? 'Есть изменения с сайта' : cloud.pending ? `Ожидают синхронизации: ${cloud.pending}` : cloud.lastSync ? 'Копии синхронизированы с аккаунтом' : 'Ожидание синхронизации'}</p>
       <button disabled={busy || cloud.syncing} onClick={() => { void syncOfflineCloud(); }}>Синхронизировать сейчас</button>
       <button disabled={busy} onClick={() => { void logout(); }}>Выйти из аккаунта</button>
       {cloud.incoming > 0 && <button disabled={busy} onClick={() => { void refresh().catch(reason => setError(errorMessage(reason))); }}>Открыть изменения с сайта</button>}
     </> : <button disabled={busy} onClick={() => { void openAccount().catch(reason => setError(errorMessage(reason))); }}>Войти для синхронизации</button>}
     <button disabled={busy} onClick={() => input.current?.click()}>Открыть файл доски</button>
+    <a href="https://bluviboard.ru/" target="_blank" rel="noopener noreferrer">Онлайн-доски и общий доступ ↗</a>
     {cloud.conflicts > 0 && <p role="status">Есть конфликт: обе версии сохранены отдельными досками. Оффлайн-копия помечена в списке.</p>}
     {cloud.warning && <p>{cloud.warning}</p>}
     {session?.kind === 'user' && cloud.error && <p className="offline-error">{cloud.error}</p>}

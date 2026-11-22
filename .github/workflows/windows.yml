@@ -21,6 +21,8 @@ jobs:
     name: Build and verify Windows x64 installer
     runs-on: windows-2025
     timeout-minutes: 45
+    env:
+      BLUVIBOARD_DESKTOP_PREVIEW: ${{ github.ref != 'refs/heads/main' }}
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -49,7 +51,15 @@ jobs:
       - run: npm run assets --workspace @whiteboard/desktop
       - run: npm run build:offline --workspace @whiteboard/desktop
       - run: npm run desktop:check
-      - run: npm run desktop:build
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          if ($env:BLUVIBOARD_DESKTOP_PREVIEW -eq 'true') {
+            npm run bundle --workspace @whiteboard/desktop -- --config src-tauri/tauri.preview.conf.json
+          } else {
+            npm run desktop:build
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Windows build failed' }
       - run: npm run build:web
       - name: Install WebView2 for the native smoke check
         shell: pwsh

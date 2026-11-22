@@ -29,7 +29,7 @@ async function connect() {
       page.on('pageerror', error => errors.push(error.message));
       context.on('request', request => {
         const url = new URL(request.url());
-        if (['http:', 'https:'].includes(url.protocol) && url.hostname !== 'tauri.localhost') external.push(request.url());
+        if (['http:', 'https:'].includes(url.protocol) && !['tauri.localhost', 'ipc.localhost'].includes(url.hostname)) external.push(request.url());
       });
       await context.setOffline(true);
       return context;
@@ -75,6 +75,10 @@ async function main() {
   await page.getByRole('button', { name: 'Сохранить файл доски', exact: true }).click();
   const downloads = path.join(profile, 'downloads');
   await expect.poll(() => fs.readdirSync(downloads).filter(name => name.endsWith('.bluviboard')).length).toBe(1);
+  await expect.poll(() => {
+    try { return JSON.parse(fs.readFileSync(path.join(downloads, fs.readdirSync(downloads).find(name => name.endsWith('.bluviboard'))), 'utf8')).format; }
+    catch { return ''; }
+  }).toBe('BluviBoard');
   const project = JSON.parse(fs.readFileSync(path.join(downloads, fs.readdirSync(downloads).find(name => name.endsWith('.bluviboard'))), 'utf8'));
   assert.equal(project.format, 'BluviBoard');
   assert.equal(project.document.elements.length, 2);
@@ -82,6 +86,10 @@ async function main() {
   await page.getByRole('button', { name: 'Действия доски', exact: true }).click();
   await page.getByRole('button', { name: 'Скачать PNG', exact: true }).click();
   await expect.poll(() => fs.readdirSync(downloads).filter(name => name.endsWith('.png')).length).toBe(1);
+  await expect.poll(async () => {
+    try { return (await sharp(path.join(downloads, fs.readdirSync(downloads).find(name => name.endsWith('.png')))).metadata()).width || 0; }
+    catch { return 0; }
+  }).toBeGreaterThan(500);
   const exported = await sharp(path.join(downloads, fs.readdirSync(downloads).find(name => name.endsWith('.png')))).metadata();
   assert(exported.width > 500 && exported.height > 500);
   await expect(page.getByRole('button', { name: 'Поделиться доской', exact: true })).toHaveCount(0);

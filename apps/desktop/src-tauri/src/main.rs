@@ -24,7 +24,7 @@ fn main() {
         }))
         .invoke_handler(tauri::generate_handler![desktop_close, cloud::desktop_cloud_request, cloud::desktop_cloud_upload])
         .setup(|app| {
-            app.manage(cloud::Cloud::new()?);
+            app.manage(cloud::Cloud::new(app.config().identifier.clone())?);
             let diagnostic_downloads = std::env::var("BLUVIBOARD_DESKTOP_DEBUG_PORT")
                 .ok().and_then(|value| value.parse::<u16>().ok()).filter(|port| *port != 0)
                 .and_then(|_| std::env::var_os("BLUVIBOARD_DESKTOP_TEST_DATA_DIR"))
@@ -37,7 +37,8 @@ fn main() {
                       Object.defineProperty(window, '__BLUVIBOARD_DESKTOP__', {{ value: true }});\
                       Object.defineProperty(window, '__BLUVIBOARD_DESKTOP_VERSION__', {{ value: '{}' }});\
                       if (location.origin !== 'https://bluviboard.ru') Object.defineProperty(window, '__BLUVIBOARD_OFFLINE__', {{ value: true }});\
-                    }}", env!("CARGO_PKG_VERSION")),
+                      Object.defineProperty(window, '__BLUVIBOARD_PREVIEW__', {{ value: {} }});\
+                    }}", env!("CARGO_PKG_VERSION"), app.config().identifier.ends_with(".preview")),
                 )
                 .on_navigation(|url| {
                     if navigation::is_board(url) || navigation::is_launcher(url) {
