@@ -71,6 +71,7 @@ async function main() {
   await expect(page.getByRole('button', { name: '+ Новая доска', exact: true })).toBeVisible({ timeout: 60000 });
   assert.match(page.url(), /^(https:\/\/tauri\.localhost|tauri:\/\/localhost)\//);
   assert.equal(await page.evaluate(() => window.__BLUVIBOARD_OFFLINE__), true);
+  assert.equal(await page.evaluate(() => window.__BLUVIBOARD_PREVIEW__), process.env.BLUVIBOARD_DESKTOP_PREVIEW === 'true');
   assert.equal(await page.evaluate(() => window.__BLUVIBOARD_DESKTOP_VERSION__), version);
   await page.getByRole('button', { name: '+ Новая доска', exact: true }).click();
   await expect(page.getByTestId('canvas')).toBeVisible();
