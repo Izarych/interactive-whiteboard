@@ -106,7 +106,7 @@ jobs:
         if: failure()
         with:
           name: Windows-diagnostics
-          path: apps/desktop/artifacts/native-smoke.png
+          path: apps/desktop/artifacts/native-smoke.*
           if-no-files-found: ignore
 
   publish:

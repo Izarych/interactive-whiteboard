@@ -12,7 +12,7 @@ const executable = process.env.BLUVIBOARD_DESKTOP_EXECUTABLE || path.join(root, 
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'bluviboard-native-offline-'));
 const port = 9223;
 let child, browser, page;
-const errors = [], external = [];
+const errors = [], external = [], diagnostics = [];
 function launch() {
   return spawn(executable, [], { env: { ...process.env, BLUVIBOARD_DESKTOP_TEST_DATA_DIR: profile, BLUVIBOARD_DESKTOP_DEBUG_PORT: String(port) }, stdio: 'inherit' });
 }
@@ -23,10 +23,17 @@ async function connect() {
     if (child.exitCode !== null) throw new Error(`Application exited early: ${child.exitCode}`);
     try {
       browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 15000 });
+      // CDP attachment otherwise replaces WebView2's native download handler with
+      // Playwright's temporary artifact directory, bypassing our save dialog.
+      const cdp = await browser.newBrowserCDPSession();
+      await cdp.send('Browser.setDownloadBehavior', { behavior: 'default', eventsEnabled: true });
       const context = browser.contexts()[0];
       await expect.poll(() => context.pages().length).toBeGreaterThan(0);
       page = context.pages()[0];
       page.on('pageerror', error => errors.push(error.message));
+      page.on('console', message => diagnostics.push(`console ${message.type()}: ${message.text()}`));
+      page.on('download', download => diagnostics.push(`download: ${download.suggestedFilename()} ${download.url().slice(0, 200)}`));
+      context.on('requestfailed', request => diagnostics.push(`request failed: ${request.url()} ${request.failure()?.errorText}`));
       context.on('request', request => {
         const url = new URL(request.url());
         if (['http:', 'https:'].includes(url.protocol) && !['tauri.localhost', 'ipc.localhost'].includes(url.hostname)) external.push(request.url());
@@ -148,14 +155,26 @@ async function main() {
   child = launch();
   await connect();
   await expect(page.getByText('4 объектов', { exact: true })).toBeVisible();
+  await page.getByLabel('Открыть файл доски', { exact: true }).setInputFiles(path.join(downloads, fs.readdirSync(downloads).find(name => name.endsWith('.bluviboard'))));
+  await expect(page.getByRole('status').filter({ hasText: 'Импортирована доска' })).toBeVisible();
+  const boards = page.getByRole('navigation', { name: 'Доски', exact: true }).getByRole('button', { name: /^Native offline persistence/ });
+  await expect(boards).toHaveCount(2);
+  await boards.first().click();
+  await expect(page.getByText('2 объектов', { exact: true })).toBeVisible();
+  await expect(page.getByText('Сохранено на компьютере', { exact: true })).toBeVisible();
   assert.deepEqual(errors, []);
   assert.deepEqual(external, []);
-  console.log('Native Windows offline smoke passed: bundled first start, no website/API requests, drawing and images on disk, restart persistence, hotkeys, single instance, safe close, failed-write recovery.');
+  console.log('Native Windows offline smoke passed: bundled first start, no website/API requests, drawing and images on disk, project export/import and PNG, restart persistence, hotkeys, single instance, safe close, failed-write recovery.');
 }
 main().catch(async error => {
   console.error(error);
   const artifacts = path.join(root, 'apps/desktop/artifacts');
   fs.mkdirSync(artifacts, { recursive: true });
+  fs.writeFileSync(path.join(artifacts, 'native-smoke.json'), JSON.stringify({
+    errors, external, diagnostics, url: page?.url(), profile,
+    downloads: fs.existsSync(path.join(profile, 'downloads')) ? fs.readdirSync(path.join(profile, 'downloads')) : [],
+    body: page && !page.isClosed() ? await page.locator('body').innerText().catch(() => '') : '',
+  }, null, 2));
   if (page && !page.isClosed()) await page.screenshot({ path: path.join(artifacts, 'native-smoke.png') }).catch(() => {});
   process.exitCode = 1;
 }).finally(async () => {
