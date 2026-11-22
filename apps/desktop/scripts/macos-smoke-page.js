@@ -27,8 +27,10 @@
     await sleep(50);
   };
   const key = target => {
-    target.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'CapsLock', code: 'CapsLock' }));
+    const down = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'CapsLock', code: 'CapsLock' });
+    target.dispatchEvent(down);
     target.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'CapsLock', code: 'CapsLock' }));
+    return down.defaultPrevented;
   };
   const run = async () => {
     await wait(() => window.__TAURI_INTERNALS__ && button('+ Новая доска'), 'offline workspace');
@@ -94,7 +96,10 @@
       await wait(() => document.querySelector('input[aria-label="Название доски"]')?.value === 'Native macOS offline', 'board after native restart');
       await wait(() => text(phase === 'restart' ? '3 объектов' : '4 объектов'), 'persisted drawings and image');
       await saved();
-      key(document.body);
+      await wait(() => button('Ластик')?.title.includes('CapsLock'), 'persisted hotkey configuration');
+      // A fast WKWebView can paint before React installs the keyboard effect.
+      // Retry only events that were NOT consumed, so the hotkey toggles once.
+      await wait(() => key(document.body), 'ready keyboard shortcut handler');
       await wait(() => button('Ластик')?.getAttribute('aria-pressed') === 'true', 'hotkey after restart');
       key(document.body); button('Карандаш').click();
       await wait(() => button('Карандаш')?.getAttribute('aria-pressed') === 'true', 'pencil after hotkey');
